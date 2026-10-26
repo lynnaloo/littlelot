@@ -6,7 +6,7 @@ Lot search for tiny home buyers, with a Readiness Score weighted by build type. 
 
 ```bash
 npm install
-cp .env.local.sample .env.local   # add LANDRECORDS_API_KEY (server-side only, never NEXT_PUBLIC_)
+cp .env.local.sample .env.local   # add LANDRECORDS_API_KEY and GOOGLE_MAPS_API_KEY (server-side only)
 npm run dev                        # http://localhost:3000
 ```
 

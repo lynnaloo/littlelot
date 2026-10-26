@@ -1,3 +1,5 @@
+import { initOpenNextCloudflareForDev } from '@opennextjs/cloudflare'
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // Proxy landrecords API calls through our server so the key never
@@ -8,3 +10,6 @@ const nextConfig = {
 }
 
 export default nextConfig
+
+// Lets `next dev` use Cloudflare bindings (R2 cache etc.) locally
+initOpenNextCloudflareForDev()

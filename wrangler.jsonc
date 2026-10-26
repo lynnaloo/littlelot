@@ -1,0 +1,29 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"main": ".open-next/worker.js",
+	"name": "littlelot",
+	"compatibility_date": "2026-10-01",
+	"compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+	"assets": {
+		"directory": ".open-next/assets",
+		"binding": "ASSETS"
+	},
+	"services": [
+		{
+			// Self-reference for OpenNext caching, must match "name" above
+			"binding": "WORKER_SELF_REFERENCE",
+			"service": "littlelot"
+		}
+	],
+	"r2_buckets": [
+		{
+			// Caches API results (searches 5 min, places and tiles 24h) so repeat
+			// requests don't hit landrecords.us or Google again.
+			// Create once: npx wrangler r2 bucket create littlelot-opennext-cache
+			"binding": "NEXT_INC_CACHE_R2_BUCKET",
+			"bucket_name": "littlelot-opennext-cache"
+		}
+	]
+	// Secrets (not in this file): LANDRECORDS_API_KEY, GOOGLE_MAPS_API_KEY
+	// Set with: npx wrangler secret put <NAME>
+}

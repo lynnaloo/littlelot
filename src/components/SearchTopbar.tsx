@@ -45,7 +45,7 @@ export function SearchTopbar({
           type="text"
           value={query}
           onChange={e => setQuery(e.target.value)}
-          placeholder="County, zip, or state..."
+          placeholder="County, city, or zip..."
           className="w-full h-8 bg-white/10 border border-white/15 rounded
                      px-3 text-xs text-tan-lt placeholder:text-tan/60
                      focus:outline-none focus:border-accent"

@@ -6,6 +6,11 @@
 .next/
 out/
 
+# Cloudflare (OpenNext build output, wrangler state, local secrets)
+.open-next/
+.wrangler/
+.dev.vars
+
 # dependencies
 node_modules/
 

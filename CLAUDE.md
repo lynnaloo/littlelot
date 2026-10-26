@@ -21,6 +21,8 @@ decision hasn't been made yet.
 
 ## What this project is
 
+Live at **findlittlelot.com** (production domain).
+
 The Little Lot is a parcel search tool for tiny home buyers. The product's single
 job is answering "can I legally and physically put my home here?" as fast as possible.
 
@@ -139,11 +141,9 @@ Key fields and their reliability:
 
 These are the known gaps. Pick up any of these without asking:
 
-1. **Geocoding:** `onSearch()` in `SearchApp.tsx` receives a place name string
-   but the API call needs a county `geoid` (FIPS code). Wire up a call to
-   Travis's Pelias geocoder (`https://api.landrecords.us/pelias` or similar —
-   confirm the endpoint) to resolve the string to a geoid before passing to
-   `/api/parcels`.
+1. **Geocoding:** Done. `/api/geocode` uses Google Geocoding (Pelias is retired)
+   to get a point, then the Census geocoder to get the county `geoid`. Needs
+   `GOOGLE_MAPS_API_KEY`, server-side only, same rules as `LANDRECORDS_API_KEY`.
 
 2. **MapLibre map view:** The card thumbnails are SVG placeholders. Build a
    `MapView` component using MapLibre GL JS that renders parcel polygons from

@@ -5,12 +5,13 @@ import type { BuildTribe } from '@/types/parcel'
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { lrid: string } }
+  { params }: { params: Promise<{ lrid: string }> }
 ) {
   const tribe = (req.nextUrl.searchParams.get('tribe') ?? 'offgrid') as BuildTribe
 
   try {
-    const feature = await fetchParcelById(params.lrid)
+    const { lrid } = await params
+    const feature = await fetchParcelById(lrid)
     if (!feature) {
       return NextResponse.json({ error: 'Lot not found' }, { status: 404 })
     }

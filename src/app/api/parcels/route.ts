@@ -38,6 +38,13 @@ export async function GET(req: NextRequest) {
     pageSize:     p.has('pageSize')  ? Number(p.get('pageSize'))  : 10,
   }
 
+  if (!filters.geoid && !filters.bbox) {
+    return NextResponse.json(
+      { error: 'Pick a county or map area to search.' },
+      { status: 400 }
+    )
+  }
+
   try {
     const { features, total } = await fetchParcels(filters)
 

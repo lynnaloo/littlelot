@@ -34,12 +34,16 @@ interface UseParcelSearchResult {
   total: number
   isLoading: boolean
   error: string | null
+  needsLocation: boolean   // no county or map area picked yet, so nothing to search
 }
 
 export function useParcelSearch(
   filters: SearchFilters | null
 ): UseParcelSearchResult {
-  const url = filters ? buildSearchUrl(filters) : null
+  // The API needs a location anchor. Without one it returns a nationwide count
+  // but no lots, so don't search until a county or map area is picked.
+  const needsLocation = !filters?.geoid && !filters?.bbox
+  const url = filters && !needsLocation ? buildSearchUrl(filters) : null
 
   const { data, error, isLoading } = useSWR(url, fetcher, {
     keepPreviousData: true,
@@ -50,6 +54,7 @@ export function useParcelSearch(
     parcels:   data?.parcels ?? [],
     total:     data?.total   ?? 0,
     isLoading,
+    needsLocation,
     error: error ? 'Could not load listings. Check your connection and try again.' : null,
   }
 }

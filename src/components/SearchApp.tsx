@@ -9,6 +9,7 @@ import { FilterSidebar } from './filters/FilterSidebar'
 import { ParcelGrid } from './cards/ParcelGrid'
 import { ParcelDetail } from './cards/ParcelDetail'
 import { useParcelSearch } from '@/lib/useParcelSearch'
+import { usePlaceSearch } from '@/lib/usePlaceSearch'
 
 type MobileTab = 'filters' | 'results' | 'detail'
 
@@ -18,8 +19,12 @@ export function SearchApp() {
   const [selectedParcel, setSelected]   = useState<Parcel | null>(null)
   const [mobileTab, setMobileTab]       = useState<MobileTab>('results')
 
-  const fullFilters: SearchFilters | null = tribe ? { tribe, ...filters } : null
-  const { parcels, total, isLoading, error } = useParcelSearch(fullFilters)
+  const { place, isLocating, locateError, search } = usePlaceSearch()
+
+  const fullFilters: SearchFilters | null = tribe
+    ? { tribe, ...filters, geoid: place?.geoid }
+    : null
+  const { parcels, isLoading, error, needsLocation } = useParcelSearch(fullFilters)
 
   const handleSelectParcel = useCallback((parcel: Parcel) => {
     setSelected(parcel)
@@ -48,7 +53,7 @@ export function SearchApp() {
         tribe={tribe}
         tribeLabel={TRIBE_LABELS[tribe]}
         onSwitchTribe={handleSwitchTribe}
-        onSearch={(query) => setFilters(f => ({ ...f, placeName: query }))}
+        onSearch={(query) => { setSelected(null); search(query) }}
       />
 
       {/* Main layout */}
@@ -76,9 +81,17 @@ export function SearchApp() {
           {/* Results bar */}
           <div className="flex items-center gap-3 px-3.5 h-10 bg-white border-b border-border flex-shrink-0">
             <span className="text-sm text-ink-2">
-              {isLoading ? 'Searching...' : (
-                <><strong className="text-ink font-semibold">{total}</strong> lots match</>
-              )}
+              {isLocating ? 'Finding that place...'
+                : needsLocation ? 'Search for a county to see lots'
+                : isLoading ? 'Searching...'
+                : (
+                  // Count what's shown: score and acreage filters run after the API
+                  // returns, so the API's total can include lots we filtered out.
+                  <>
+                    <strong className="text-ink font-semibold">{parcels.length}</strong> lots
+                    match in {place?.label}
+                  </>
+                )}
             </span>
             <select
               className="ml-auto h-7 text-xs border border-border rounded px-2 bg-white text-ink"
@@ -91,6 +104,12 @@ export function SearchApp() {
             </select>
           </div>
 
+          {locateError && (
+            <div className="m-4 p-3 bg-amber-lt border border-amber/25 rounded text-sm text-ink-2">
+              {locateError}
+            </div>
+          )}
+
           {error && (
             <div className="m-4 p-3 bg-danger-lt border border-danger/20 rounded text-sm text-danger">
               {error}
@@ -100,6 +119,7 @@ export function SearchApp() {
           <ParcelGrid
             parcels={parcels}
             isLoading={isLoading}
+            needsLocation={needsLocation}
             selectedLrid={selectedParcel?.lrid}
             onSelect={handleSelectParcel}
           />

@@ -6,6 +6,7 @@ import { ParcelCard } from './ParcelCard'
 interface ParcelGridProps {
   parcels: Parcel[]
   isLoading: boolean
+  needsLocation: boolean
   selectedLrid?: string
   onSelect: (parcel: Parcel) => void
 }
@@ -30,9 +31,20 @@ function SkeletonCard() {
 export function ParcelGrid({
   parcels,
   isLoading,
+  needsLocation,
   selectedLrid,
   onSelect,
 }: ParcelGridProps) {
+  if (needsLocation) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center py-20 text-center text-ink-3">
+        <span className="text-4xl mb-3">📍</span>
+        <p className="text-sm font-medium text-ink mb-1">Where are you looking?</p>
+        <p className="text-xs">Search for a county to see lots.</p>
+      </div>
+    )
+  }
+
   return (
     <div className="flex-1 overflow-y-auto p-3
                     grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3
