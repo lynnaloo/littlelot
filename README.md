@@ -1,6 +1,8 @@
+<img src="public/logo.svg" alt="The Little Lot logo" width="88">
+
 # The Little Lot
 
-Lot search for tiny home buyers, with a Readiness Score weighted by build type. Zoning codes are shown; plain-language zoning summaries are coming soon (code descriptions aren't in the landrecords.us API yet).
+Lot search for tiny home buyers, with a Readiness Score weighted by build type. Zoning codes (and county descriptions, where available) are shown; plain-language zoning summaries are coming soon.
 
 ```bash
 npm install

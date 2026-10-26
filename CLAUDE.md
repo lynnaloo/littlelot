@@ -123,14 +123,14 @@ Key fields and their reliability:
 
 | Field | Reliability | Notes |
 |---|---|---|
-| `calcarea` | High | Use this for acreage. Prefer over `taxacres`. |
+| `calcarea` | High | Square metres, not acres. Use `parcelAcres()` in `scoring.ts`. Prefer over `taxacres`. |
 | `accesstype` | High | Indexed field. Always present. |
 | `fldzone` | High | FEMA flood zone. Always present. |
 | `zoningcode` | Medium | Present in most counties. Codes vary. |
-| `zoningdesc` | Low | Often missing or abbreviated. |
+| `zoningdesc` | Low | County's name for the zone. Partial coverage, often missing. |
 | `numbldgs` | Medium | Use to determine vacancy. |
 | `landvalue` | Medium | Assessed value. Not market value. |
-| `ownertype` | Medium | Individual / LLC / trust / government. |
+| `ownertype` | Medium | Uppercase: `PERSON`, `BUSINESS`, `TRUST`, `ESTATE`, `NONPROFIT`, `GOVERNMENT`, or null. |
 | `taxacres` | Low | Use only as fallback when `calcarea` is null. |
 
 ---

@@ -1,6 +1,6 @@
 /**
  * Tile proxy — forwards MapLibre tile requests to landrecords.us
- * with the API key injected server-side.
+ * with the API key injected server-side as a Bearer token.
  *
  * Vector tiles:  /api/tiles/{z}/{x}/{y}.pbf
  * Raster tiles:  /api/tiles/raster/{z}/{x}/{y}.png
@@ -23,15 +23,16 @@ export async function GET(
     // /api/tiles/raster/{z}/{x}/{y}.png
     const [, z, x, yPng] = slug
     const y = yPng.replace('.png', '')
-    upstreamUrl = `${BASE_URL}/wmts/parcel/${z}/${x}/${y}.png?apikey=${API_KEY}`
+    upstreamUrl = `${BASE_URL}/pro:parcel_us@EPSG:3857x2@png8/${z}/${x}/${y}.png8`
   } else {
     // /api/tiles/{z}/{x}/{y}.pbf
     const [z, x, yPbf] = slug
     const y = yPbf.replace('.pbf', '')
-    upstreamUrl = `${BASE_URL}/tiles/parcel/${z}/${x}/${y}.pbf?apikey=${API_KEY}`
+    upstreamUrl = `${BASE_URL}/pro:parcel_us@EPSG:3857x2@pbf/${z}/${x}/${y}.pbf`
   }
 
   const res = await fetch(upstreamUrl, {
+    headers: { Authorization: `Bearer ${API_KEY}` },
     next: { revalidate: 86400 }, // tiles are stable — cache for 24h
   })
 

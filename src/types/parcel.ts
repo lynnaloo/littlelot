@@ -18,7 +18,14 @@ export type FloodZone =
   | 'X500'    // moderate risk (0.2% annual chance)
   | 'unknown'
 
-export type OwnerType = 'individual' | 'llc' | 'trust' | 'government' | 'other'
+// Values as returned by the API (uppercase). null when the county doesn't report it.
+export type OwnerType =
+  | 'PERSON'
+  | 'BUSINESS'
+  | 'TRUST'
+  | 'ESTATE'
+  | 'NONPROFIT'
+  | 'GOVERNMENT'
 
 export type BuildTribe = 'thow' | 'foundation' | 'offgrid' | 'community'
 
@@ -30,13 +37,13 @@ export interface ParcelAttributes {
   countyfp: string          // county FIPS
   ownername: string
   owneraddr: string
-  siteaddr: string
+  parceladdr: string
   usecode: string           // land use code (varies by county)
   usedesc: string           // human-readable use description
   zoningcode: string | null
-  zoningdesc: string | null // not in the API yet, see ZONING_DETAILS_AVAILABLE
+  zoningdesc: string | null // partial coverage, missing in some counties
   taxacres: number | null   // acreage from tax records (less reliable)
-  calcarea: number | null   // acreage calculated from geometry (preferred)
+  calcarea: number | null   // square metres, calculated from geometry (preferred)
   landvalue: number | null  // assessed land value
   imprvalue: number | null  // assessed improvement value
   numbldgs: number | null   // number of buildings on parcel
@@ -44,7 +51,7 @@ export interface ParcelAttributes {
   yearbuilt: number | null
   saleamt: number | null
   saledate: string | null
-  ownertype: OwnerType
+  ownertype: OwnerType | null
   accesstype: AccessType
   fldzone: FloodZone
   elevmin: number | null
@@ -61,7 +68,7 @@ export interface ParcelAttributes {
 // Enriched parcel — raw attributes plus computed fields
 export interface Parcel extends ParcelAttributes {
   // computed
-  acreage: number           // calcarea ?? taxacres ?? 0
+  acreage: number           // parcelAcres(): calcarea in acres ?? taxacres ?? 0
   isVacant: boolean         // numbldgs === 0 || imprvalue === 0
   floodRisk: 'none' | 'moderate' | 'high'
   accessLabel: string       // human-readable access type
@@ -108,10 +115,11 @@ export interface SearchResult {
   pageSize: number
 }
 
-// The API has zoning codes but not what each code means (zoningdesc). While
-// false, we show the raw code, mark the explanation "coming soon", leave zoning
-// out of the score, and scale the remaining dimensions up to 100. Flip to true
-// once Travis ships zoningdesc.
+// The API has zoning codes and, in some counties, the county's name for the
+// code (zoningdesc), but nothing about what a zone allows for tiny homes.
+// While false, we show the code and description as-is, mark the plain-language
+// summary "coming soon", leave zoning out of the score, and scale the remaining
+// dimensions up to 100.
 export const ZONING_DETAILS_AVAILABLE = false
 
 // Score weights differ by tribe

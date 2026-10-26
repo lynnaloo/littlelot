@@ -8,7 +8,6 @@
  */
 
 import type { ParcelAttributes, SearchFilters, AccessType } from '@/types/parcel'
-import { ZONING_DETAILS_AVAILABLE } from '@/types/parcel'
 
 const BASE_URL = process.env.LANDRECORDS_API_BASE_URL ?? 'https://api.landrecords.us'
 const API_KEY  = process.env.LANDRECORDS_API_KEY
@@ -19,16 +18,19 @@ if (!API_KEY && process.env.NODE_ENV === 'production') {
 
 // ── WFS endpoint ─────────────────────────────────────────────────────────────
 
-const WFS_BASE = `${BASE_URL}/wfs`
+const WFS_BASE = `${BASE_URL}/pro/wfs`
+
+// The API takes the key as a Bearer token. Max 10 features per request.
+const AUTH_HEADERS = { Authorization: `Bearer ${API_KEY ?? ''}` }
+const MAX_COUNT = 10
 
 function wfsUrl(params: Record<string, string>): string {
   const base: Record<string, string> = {
     service:     'WFS',
     version:     '2.0.0',
-    apikey:      API_KEY ?? '',
     outputFormat:'application/json',
-    typeName:    'parcel',
-    count:       '20',
+    typeNames:   'pro:parcel_us',
+    count:       String(MAX_COUNT),
     startIndex:  '0',
   }
   const merged = { ...base, ...params }
@@ -36,7 +38,7 @@ function wfsUrl(params: Record<string, string>): string {
 }
 
 // ── Build a CQL filter from SearchFilters ────────────────────────────────────
-// Rules from the API docs:
+// Rules from the API docs (LIKE on geoid is refused, use = instead):
 //   - Must include at least one indexed field as an anchor
 //   - Max 3 additional predicates beyond the anchor
 //   - Indexed fields: geoid, lrid, ownername, accesstype, ownertype, placetype
@@ -45,9 +47,9 @@ function wfsUrl(params: Record<string, string>): string {
 function buildCqlFilter(filters: SearchFilters): string {
   const clauses: string[] = []
 
-  // Anchor: county geoid (statefp + countyfp combined counts as geoid)
+  // Anchor: county geoid (5-digit statefp + countyfp)
   if (filters.geoid) {
-    clauses.push(`geoid LIKE '${filters.geoid}%'`)
+    clauses.push(`geoid='${filters.geoid}'`)
   } else if (filters.bbox) {
     const [minLng, minLat, maxLng, maxLat] = filters.bbox
     clauses.push(
@@ -87,7 +89,7 @@ export async function fetchParcels(
 ): Promise<{ features: GeoJSON.Feature<GeoJSON.Geometry, ParcelAttributes>[]; total: number }> {
   const cql = buildCqlFilter(filters)
   const page     = filters.page ?? 0
-  const pageSize = filters.pageSize ?? 20
+  const pageSize = Math.min(filters.pageSize ?? MAX_COUNT, MAX_COUNT)
 
   const url = wfsUrl({
     request:    'GetFeature',
@@ -97,9 +99,8 @@ export async function fetchParcels(
     // Request only the attributes we need to keep response size down
     propertyName: [
       'lrid','geoid','statefp','countyfp',
-      'ownername','owneraddr','siteaddr',
-      'usecode','usedesc','zoningcode',
-      ...(ZONING_DETAILS_AVAILABLE ? ['zoningdesc'] : []),
+      'ownername','owneraddr','parceladdr',
+      'usecode','usedesc','zoningcode','zoningdesc',
       'taxacres','calcarea','landvalue','imprvalue',
       'numbldgs','yearbuilt','saleamt','saledate',
       'ownertype','accesstype','fldzone',
@@ -111,6 +112,7 @@ export async function fetchParcels(
   })
 
   const res = await fetch(url, {
+    headers: AUTH_HEADERS,
     next: { revalidate: 300 }, // cache for 5 minutes
   })
 
@@ -122,7 +124,7 @@ export async function fetchParcels(
 
   return {
     features: json.features ?? [],
-    total:    json.totalFeatures ?? json.numberMatched ?? 0,
+    total:    json.numberMatched ?? json.numberReturned ?? 0,
   }
 }
 
@@ -137,7 +139,7 @@ export async function fetchParcelById(
     count:      '1',
   })
 
-  const res = await fetch(url, { next: { revalidate: 60 } })
+  const res = await fetch(url, { headers: AUTH_HEADERS, next: { revalidate: 60 } })
 
   if (!res.ok) return null
 

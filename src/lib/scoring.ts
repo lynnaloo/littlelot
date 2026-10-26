@@ -20,6 +20,16 @@ import type {
 } from '@/types/parcel'
 import { TRIBE_SCORE_WEIGHTS, ZONING_DETAILS_AVAILABLE } from '@/types/parcel'
 
+// ── Acreage ──────────────────────────────────────────────────────────────────
+// calcarea is in square metres; taxacres is already in acres.
+
+const SQ_METRES_PER_ACRE = 4046.8564224
+
+export function parcelAcres(attrs: ParcelAttributes): number {
+  if (attrs.calcarea != null) return attrs.calcarea / SQ_METRES_PER_ACRE
+  return attrs.taxacres ?? 0
+}
+
 // ── Zoning score ─────────────────────────────────────────────────────────────
 // We do a best-effort classification from the zoning code string.
 // Definitive zoning guidance lives in the county guides pages.
@@ -75,7 +85,7 @@ function accessScore(accesstype: AccessType, tribe: BuildTribe): number {
 
 function waterScore(attrs: ParcelAttributes, tribe: BuildTribe): number {
   const max = TRIBE_SCORE_WEIGHTS[tribe].water
-  const acres = attrs.calcarea ?? attrs.taxacres ?? 0
+  const acres = parcelAcres(attrs)
 
   // Off-grid tribe weights water heavily — penalise small parcels
   if (tribe === 'offgrid') {
@@ -113,16 +123,16 @@ function floodScore(fldzone: FloodZone, tribe: BuildTribe): number {
 
 function hoaScore(attrs: ParcelAttributes, tribe: BuildTribe): number {
   const max = TRIBE_SCORE_WEIGHTS[tribe].hoa
-  // If owner is government or individual on a large lot, HOA unlikely
-  if (attrs.ownertype === 'government') return max
-  if (attrs.ownertype === 'individual') {
-    const acres = attrs.calcarea ?? attrs.taxacres ?? 0
+  // If owner is government or a person on a large lot, HOA unlikely
+  if (attrs.ownertype === 'GOVERNMENT') return max
+  if (attrs.ownertype === 'PERSON') {
+    const acres = parcelAcres(attrs)
     // Large rural parcels very rarely have HOAs
     if (acres >= 5) return max
     if (acres >= 2) return Math.round(max * 0.75)
   }
-  // LLCs and subdivisions — more likely to have CC&Rs
-  if (attrs.ownertype === 'llc') return Math.round(max * 0.50)
+  // Businesses (LLCs, developers) — more likely to have CC&Rs
+  if (attrs.ownertype === 'BUSINESS') return Math.round(max * 0.50)
   // Unknown
   return Math.round(max * 0.55)
 }
@@ -153,9 +163,13 @@ export function computeScore(attrs: ParcelAttributes, tribe: BuildTribe): ScoreB
 
 export function zoningPlainText(attrs: ParcelAttributes, tribe: BuildTribe): string {
   if (!ZONING_DETAILS_AVAILABLE) {
-    return attrs.zoningcode
-      ? `Zoned ${attrs.zoningcode}. A plain-language summary of what this code allows is coming soon. Until then, check with county planning before you buy.`
-      : 'No zoning code on record for this lot. Check with county planning before you buy.'
+    if (!attrs.zoningcode) {
+      return 'No zoning code on record for this lot. Check with county planning before you buy.'
+    }
+    const zone = attrs.zoningdesc
+      ? `${attrs.zoningcode} (${attrs.zoningdesc})`
+      : attrs.zoningcode
+    return `Zoned ${zone}. A plain-language summary of what this zone allows for tiny homes is coming soon. Until then, check with county planning before you buy.`
   }
 
   const code = attrs.zoningcode ?? 'Unknown'
@@ -212,10 +226,9 @@ export function accessLabel(accesstype: AccessType): string {
 export function hoaStatusLabel(
   attrs: ParcelAttributes
 ): 'none' | 'present' | 'unknown' {
-  const acres = attrs.calcarea ?? attrs.taxacres ?? 0
-  if (attrs.ownertype === 'government') return 'none'
-  if (attrs.ownertype === 'individual' && acres >= 5) return 'none'
-  if (attrs.ownertype === 'llc') return 'unknown'
+  const acres = parcelAcres(attrs)
+  if (attrs.ownertype === 'GOVERNMENT') return 'none'
+  if (attrs.ownertype === 'PERSON' && acres >= 5) return 'none'
   return 'unknown'
 }
 
@@ -228,7 +241,7 @@ export function enrichParcel(
   nearestTown: string | null = null
 ): Parcel {
   const scoreBreakdown = computeScore(attrs, tribe)
-  const acreage = attrs.calcarea ?? attrs.taxacres ?? 0
+  const acreage = parcelAcres(attrs)
 
   return {
     ...attrs,

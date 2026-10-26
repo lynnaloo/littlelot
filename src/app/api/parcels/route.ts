@@ -35,7 +35,7 @@ export async function GET(req: NextRequest) {
     minScore:     p.has('minScore')  ? Number(p.get('minScore'))  : undefined,
     sortBy:       (p.get('sortBy') ?? 'score') as SearchFilters['sortBy'],
     page:         p.has('page')      ? Number(p.get('page'))      : 0,
-    pageSize:     p.has('pageSize')  ? Number(p.get('pageSize'))  : 20,
+    pageSize:     p.has('pageSize')  ? Number(p.get('pageSize'))  : 10,
   }
 
   try {
