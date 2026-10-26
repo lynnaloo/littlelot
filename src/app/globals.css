@@ -1,0 +1,35 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Inter:wght@400;500;600&display=swap');
+@import 'maplibre-gl/dist/maplibre-gl.css';
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --ink:        #1C2B1E;
+  --ink-2:      #4A5C4D;
+  --ink-3:      #7A8C7D;
+  --accent:     #4A7C59;
+  --accent-lt:  #EAF2EC;
+  --tan:        #C8B89A;
+  --tan-lt:     #F0EDE6;
+  --surface:    #F7F4EF;
+  --border:     #DDD8CF;
+  --amber:      #C47D2A;
+  --amber-lt:   #FDF4E7;
+  --danger:     #E8422A;
+  --danger-lt:  #FDF0EE;
+}
+
+* { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: 'Inter', system-ui, sans-serif;
+  background: var(--tan-lt);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* MapLibre canvas */
+.maplibregl-map { font-family: 'Inter', sans-serif; }
