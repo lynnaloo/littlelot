@@ -7,6 +7,9 @@ interface ParcelGridProps {
   parcels: Parcel[]
   isLoading: boolean
   needsLocation: boolean
+  hasMore: boolean
+  isLoadingMore: boolean
+  onLoadMore: () => void
   selectedLrid?: string
   onSelect: (parcel: Parcel) => void
 }
@@ -28,10 +31,24 @@ function SkeletonCard() {
   )
 }
 
+function LoadMoreButton({ isLoading, onClick }: { isLoading: boolean; onClick: () => void }) {
+  return (
+    <button onClick={onClick} disabled={isLoading}
+            className="h-9 px-4 bg-white border border-border rounded text-sm font-medium text-ink
+                       hover:border-accent hover:text-accent transition-colors
+                       disabled:opacity-60 disabled:cursor-wait">
+      {isLoading ? 'Loading more lots...' : 'Show more lots'}
+    </button>
+  )
+}
+
 export function ParcelGrid({
   parcels,
   isLoading,
   needsLocation,
+  hasMore,
+  isLoadingMore,
+  onLoadMore,
   selectedLrid,
   onSelect,
 }: ParcelGridProps) {
@@ -56,18 +73,28 @@ export function ParcelGrid({
             <div className="col-span-full flex flex-col items-center justify-center
                             py-20 text-center text-ink-3">
               <span className="text-4xl mb-3">🌾</span>
-              <p className="text-sm font-medium text-ink mb-1">No lots match your filters</p>
-              <p className="text-xs">Try loosening the minimum score or acreage range.</p>
+              <p className="text-sm font-medium text-ink mb-1">No lots match your filters yet</p>
+              <p className="text-xs mb-3">Try loosening the minimum score or acreage range.</p>
+              {hasMore && <LoadMoreButton isLoading={isLoadingMore} onClick={onLoadMore} />}
             </div>
           )
-          : parcels.map(parcel => (
-            <ParcelCard
-              key={parcel.lrid}
-              parcel={parcel}
-              isSelected={parcel.lrid === selectedLrid}
-              onSelect={onSelect}
-            />
-          ))
+          : (
+            <>
+              {parcels.map(parcel => (
+                <ParcelCard
+                  key={parcel.lrid}
+                  parcel={parcel}
+                  isSelected={parcel.lrid === selectedLrid}
+                  onSelect={onSelect}
+                />
+              ))}
+              {hasMore && (
+                <div className="col-span-full flex justify-center py-3">
+                  <LoadMoreButton isLoading={isLoadingMore} onClick={onLoadMore} />
+                </div>
+              )}
+            </>
+          )
       }
     </div>
   )

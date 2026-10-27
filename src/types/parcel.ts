@@ -1,13 +1,22 @@
 // Types derived from the landrecords.us parcel-standard schema
 // https://github.com/land-record/parcel-standard
 
-export type AccessType =
+// How you reach the lot by road. Not in the API yet (see ROAD_ACCESS_AVAILABLE).
+export type RoadAccess =
   | 'paved'
   | 'gravel'
   | 'unimproved'
   | 'private'
   | 'none'
   | 'unknown'
+
+// accesstype: whether the public may enter the land (parks, wildlife areas).
+// Not road access. null for most private land.
+export type PublicAccess =
+  | 'OPEN'
+  | 'RESTRICTED'
+  | 'CLOSED'
+  | 'UNKNOWN'
 
 export type FloodZone =
   | 'X'       // minimal risk
@@ -33,11 +42,15 @@ export type BuildTribe = 'thow' | 'foundation' | 'offgrid' | 'community'
 export interface ParcelAttributes {
   lrid: string              // unique parcel ID
   geoid: string             // county FIPS + parcel id
+  parcelid: string | null   // the county's own parcel number, used by assessors and planning
   statefp: string           // state FIPS
   countyfp: string          // county FIPS
-  ownername: string
-  owneraddr: string
+  // Public record, but not shown in the UI yet: owner contact may become a paid feature
+  ownername: string | null
+  owneraddr: string | null
   parceladdr: string
+  countyname: string | null
+  parcelstate: string | null
   usecode: string           // land use code (varies by county)
   usedesc: string           // human-readable use description
   zoningcode: string | null
@@ -52,11 +65,11 @@ export interface ParcelAttributes {
   saleamt: number | null
   saledate: string | null
   ownertype: OwnerType | null
-  accesstype: AccessType
+  accesstype: PublicAccess | null
   fldzone: FloodZone
-  elevmin: number | null
-  elevavg: number | null
-  elevmax: number | null
+  elevmin: number | null    // metres
+  elevavg: number | null    // metres
+  elevmax: number | null    // metres
   centroidx: number         // longitude of centroid
   centroidy: number         // latitude of centroid
   surfpointx: number        // longitude of a point guaranteed inside parcel
@@ -71,13 +84,14 @@ export interface Parcel extends ParcelAttributes {
   acreage: number           // parcelAcres(): calcarea in acres ?? taxacres ?? 0
   isVacant: boolean         // numbldgs === 0 || imprvalue === 0
   floodRisk: 'none' | 'moderate' | 'high'
-  accessLabel: string       // human-readable access type
+  accessLabel: string       // human-readable road access
   distanceToTown: number | null   // miles, from Pelias geocoder
   nearestTown: string | null
   readinessScore: number    // 0–100, tribe-weighted composite
   scoreBreakdown: ScoreBreakdown
   zoningPlainText: string   // plain-English zoning summary
   hoaStatus: 'none' | 'present' | 'unknown'
+  geometry: GeoJSON.Geometry | null   // lot outline, longitude/latitude
 }
 
 export interface ScoreBreakdown {
@@ -97,22 +111,20 @@ export interface SearchFilters {
   minAcres?: number
   maxAcres?: number
   maxLandValue?: number
-  accessTypes?: AccessType[]
+  roadAccess?: RoadAccess[]   // UI only until road data exists
   noHoa?: boolean
   noFloodRisk?: boolean
   noStructures?: boolean
   minScore?: number
   maxElevation?: number
-  sortBy?: 'score' | 'acres_desc' | 'value_asc' | 'town_dist'
-  page?: number
-  pageSize?: number
+  sortBy?: 'score' | 'acres_desc' | 'value_asc'
+  start?: number          // where to resume in the API's results (SearchResult.next)
 }
 
 export interface SearchResult {
   parcels: Parcel[]
-  total: number
-  page: number
-  pageSize: number
+  matched: number | null  // lots the query matched, before score and HOA checks; null if the API doesn't say
+  next: number | null     // pass as SearchFilters.start for more lots; null when there are no more
 }
 
 // The API has zoning codes and, in some counties, the county's name for the
@@ -122,12 +134,27 @@ export interface SearchResult {
 // dimensions up to 100.
 export const ZONING_DETAILS_AVAILABLE = false
 
+// The API has no road data (accesstype is public access to the land, not roads).
+// While false, road access shows "Unknown, verify", is left out of the score,
+// and the remaining dimensions are scaled up to 100, same as zoning above.
+export const ROAD_ACCESS_AVAILABLE = false
+
 // Score weights differ by tribe
 export const TRIBE_SCORE_WEIGHTS: Record<BuildTribe, ScoreBreakdown> = {
   thow:       { zoning: 30, access: 30, water: 10, flood: 15, hoa: 15, total: 0 },
   foundation: { zoning: 35, access: 20, water: 20, flood: 15, hoa: 10, total: 0 },
   offgrid:    { zoning: 25, access: 20, water: 25, flood: 15, hoa: 15, total: 0 },
   community:  { zoning: 30, access: 25, water: 15, flood: 15, hoa: 15, total: 0 },
+}
+
+// Starting minimum lot size by tribe. Under 0.1 ac is mostly slivers and
+// common areas. Off-grid needs room for a well and septic, which many counties
+// require about an acre for. Buyers can change it in the filters.
+export const TRIBE_MIN_ACRES: Record<BuildTribe, number> = {
+  thow:       0.1,
+  foundation: 0.1,
+  offgrid:    1,
+  community:  0.1,
 }
 
 export const TRIBE_LABELS: Record<BuildTribe, string> = {

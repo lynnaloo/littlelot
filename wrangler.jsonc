@@ -4,6 +4,13 @@
 	"name": "littlelot",
 	"compatibility_date": "2026-10-01",
 	"compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+	// Keep littlelot.lynnaloo.workers.dev as a backup address
+	"workers_dev": true,
+	// Cloudflare creates the DNS records and certificates for these
+	"routes": [
+		{ "pattern": "findlittlelot.com", "custom_domain": true },
+		{ "pattern": "www.findlittlelot.com", "custom_domain": true }
+	],
 	"assets": {
 		"directory": ".open-next/assets",
 		"binding": "ASSETS"

@@ -1,8 +1,18 @@
 'use client'
 
 import type { Parcel, BuildTribe } from '@/types/parcel'
-import { TRIBE_SCORE_WEIGHTS, ZONING_DETAILS_AVAILABLE } from '@/types/parcel'
+import {
+  TRIBE_SCORE_WEIGHTS,
+  ZONING_DETAILS_AVAILABLE,
+  ROAD_ACCESS_AVAILABLE,
+} from '@/types/parcel'
 import { ScorePill } from '../ui/ScorePill'
+import { formatAcres } from '@/lib/scoring'
+import { planningSearchUrl } from '@/lib/counties'
+import dynamic from 'next/dynamic'
+
+// MapLibre needs the browser
+const MapView = dynamic(() => import('../map/MapView').then(m => m.MapView), { ssr: false })
 
 interface ParcelDetailProps {
   parcel: Parcel | null
@@ -39,17 +49,39 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   )
 }
 
-const AFFILIATE_RESOURCES = [
-  { icon: '🛡️', cat: 'Insurance',    name: 'Foremost — THOW and park model',
-    desc: 'One of few carriers covering THOWs as personal property.' },
-  { icon: '🏗️', cat: 'Financing',    name: 'Hearth — tiny home loans',
-    desc: 'No land required as collateral. Understands non-traditional builds.' },
-  { icon: '☀️', cat: 'Off-grid',     name: 'Renogy — solar starter kits',
-    desc: 'Kits sized for tiny homes. Sizing calculator included.' },
-  { icon: '💧', cat: 'Water',        name: 'Well drilling estimator',
-    desc: 'National average cost by region and depth.' },
-  { icon: '⚖️', cat: 'Legal',        name: 'Find a land use attorney',
-    desc: 'Before closing on uncertain zoning, a one-hour consult is cheap.' },
+const FEET_PER_METRE = 3.28084
+
+// A point inside the lot (the centroid can fall outside odd shapes)
+function mapsUrl(parcel: Parcel): string {
+  return `https://www.google.com/maps/search/?api=1&query=${parcel.surfpointy},${parcel.surfpointx}`
+}
+
+// accesstype is set mostly on public land, which is rarely for sale
+const PUBLIC_ACCESS_LABELS: Record<NonNullable<Parcel['accesstype']>, string> = {
+  OPEN:       'Open to the public',
+  RESTRICTED: 'Restricted public access',
+  CLOSED:     'Closed to the public',
+  UNKNOWN:    'Unknown, verify',
+}
+
+// Plain links for now. Swap in referral links once affiliate programs are set
+// up, and bring back the referral disclosure below the list when they are.
+const RESOURCES = [
+  { icon: '🛡️', cat: 'Insurance', name: 'Foremost: tiny home insurance',
+    href: 'https://www.foremost.com/',
+    desc: 'Covers RVIA or NOAH certified THOWs and tiny homes on foundations. Ask an agent which program fits.' },
+  { icon: '🏗️', cat: 'Financing', name: 'Tiny home financing options',
+    href: 'https://lendedu.com/blog/tiny-home-financing-loans/',
+    desc: 'Most tiny homes don\'t qualify for a mortgage. Personal, RV, and builder loans compared.' },
+  { icon: '☀️', cat: 'Off-grid', name: 'Renogy: solar kits',
+    href: 'https://www.renogy.com/',
+    desc: 'Off-grid solar kits and batteries, from starter to whole-home sizes.' },
+  { icon: '💧', cat: 'Water', name: 'Well drilling cost guide',
+    href: 'https://www.bobvila.com/articles/well-drilling-cost/',
+    desc: 'Typical cost per foot and by depth. Get local quotes before you buy.' },
+  { icon: '⚖️', cat: 'Legal', name: 'Find a land use attorney',
+    href: 'https://www.findlegalhelp.org/',
+    desc: 'Lawyer referral services in your state. Before closing on uncertain zoning, a one-hour consult is cheap.' },
 ]
 
 export function ParcelDetail({ parcel, tribe, onBack }: ParcelDetailProps) {
@@ -63,8 +95,10 @@ export function ParcelDetail({ parcel, tribe, onBack }: ParcelDetailProps) {
     )
   }
 
-  const acreage = parcel.acreage.toFixed(1)
-  const location = [parcel.placename, parcel.countyfp, parcel.statefp]
+  const acreage = formatAcres(parcel.acreage)
+  // Vacant land often has a placeholder like "NO ADDRESSED STRUCTURES"; keep only street addresses
+  const address  = /^\d/.test(parcel.parceladdr ?? '') ? parcel.parceladdr : null
+  const location = [address, parcel.countyname, parcel.parcelstate]
     .filter(Boolean).join(', ')
 
   return (
@@ -78,18 +112,9 @@ export function ParcelDetail({ parcel, tribe, onBack }: ParcelDetailProps) {
         </button>
       )}
 
-      {/* map thumb */}
-      <div className="h-36 bg-[#a8c89a] flex-shrink-0 relative overflow-hidden">
-        <svg viewBox="0 0 310 144" className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
-          <rect width="310" height="144" fill="#a8c89a"/>
-          <path d="M0 110 Q60 80 130 96 Q190 68 260 84 L310 90 L310 144 L0 144Z"
-                fill="#7da870" opacity=".5"/>
-          <rect x="70" y="28" width="140" height="80" rx="4"
-                fill="none" stroke="#4A7C59" strokeWidth="2.5"/>
-          <rect x="72" y="30" width="136" height="76" rx="3" fill="#4A7C5928"/>
-          <circle cx="140" cy="68" r="5" fill="#4A7C59"/>
-          <circle cx="140" cy="68" r="12" fill="#4A7C5928"/>
-        </svg>
+      {/* map of this lot */}
+      <div className="h-36 flex-shrink-0 relative overflow-hidden bg-tan-lt">
+        <MapView parcels={[parcel]} selectedLrid={parcel.lrid} compact />
       </div>
 
       {/* score strip */}
@@ -120,12 +145,14 @@ export function ParcelDetail({ parcel, tribe, onBack }: ParcelDetailProps) {
         <Section title="Lot basics">
           <DetailRow label="Acreage"       value={`${acreage} ac`} />
           <DetailRow label="Location"      value={location} />
+          <DetailRow label="Parcel ID"     value={parcel.parcelid ?? 'Not on record'} />
           {parcel.nearestTown && parcel.distanceToTown && (
             <DetailRow label="Distance to town"
                        value={`${parcel.distanceToTown.toFixed(1)} mi to ${parcel.nearestTown}`} />
           )}
-          {parcel.elevavg && (
-            <DetailRow label="Elevation (avg)" value={`${Math.round(parcel.elevavg).toLocaleString()} ft`} />
+          {parcel.elevavg != null && (
+            <DetailRow label="Elevation (avg)"
+                       value={`${Math.round(parcel.elevavg * FEET_PER_METRE).toLocaleString()} ft`} />
           )}
           <DetailRow label="Last sold"
                      value={parcel.saledate
@@ -133,6 +160,14 @@ export function ParcelDetail({ parcel, tribe, onBack }: ParcelDetailProps) {
                        : 'Not on record'} />
           <DetailRow label="Assessed value"
                      value={parcel.landvalue ? `$${parcel.landvalue.toLocaleString()}` : 'Not available'} />
+          <a href={mapsUrl(parcel)} target="_blank" rel="noopener noreferrer"
+             className="inline-block mt-2 text-xs text-accent font-medium hover:underline">
+            Open in Google Maps →
+          </a>
+          <p className="text-[10px] text-ink-3 mt-1 leading-relaxed">
+            Most vacant land has no street address. Use the parcel ID with the county
+            assessor or planning office to ask about this lot.
+          </p>
         </Section>
 
         <Section title="Zoning and legality">
@@ -142,25 +177,31 @@ export function ParcelDetail({ parcel, tribe, onBack }: ParcelDetailProps) {
             </div>
             <div className="text-xs text-ink-2 leading-relaxed">{parcel.zoningPlainText}</div>
           </div>
-          <a href="#" className="text-xs text-accent font-medium hover:underline">
+          <a href={planningSearchUrl(
+               [parcel.countyname, parcel.parcelstate].filter(Boolean).join(', '))} target="_blank" rel="noopener noreferrer"
+             className="text-xs text-accent font-medium hover:underline">
             Verify with county planning →
           </a>
         </Section>
 
-        <Section title="Access and infrastructure">
-          <DetailRow label="Road access" value={parcel.accessLabel}
-                     status={parcel.accesstype === 'paved' ? 'ok'
-                           : parcel.accesstype === 'none' ? 'bad' : 'warn'} />
+        <Section title={ROAD_ACCESS_AVAILABLE ? 'Access and infrastructure' : 'Site conditions'}>
+          {ROAD_ACCESS_AVAILABLE && (
+            <DetailRow label="Road access" value={parcel.accessLabel} status="warn" />
+          )}
+          {parcel.accesstype && (
+            <DetailRow label="Public access" value={PUBLIC_ACCESS_LABELS[parcel.accesstype]}
+                       status="warn" />
+          )}
           <DetailRow label="Flood zone"
-                     value={parcel.fldzone === 'X' ? 'Zone X — minimal risk'
-                          : parcel.fldzone === 'unknown' ? 'Unknown — verify'
+                     value={parcel.fldzone === 'X' ? 'Zone X, minimal risk'
+                          : parcel.fldzone === 'unknown' ? 'Unknown, verify'
                           : `Zone ${parcel.fldzone}`}
                      status={parcel.floodRisk === 'none' ? 'ok'
                            : parcel.floodRisk === 'moderate' ? 'warn' : 'bad'} />
           <DetailRow label="HOA / CC&Rs"
                      value={parcel.hoaStatus === 'none' ? 'None on record'
                           : parcel.hoaStatus === 'present' ? 'CC&Rs present'
-                          : 'Unknown — verify'}
+                          : 'Unknown, verify'}
                      status={parcel.hoaStatus === 'none' ? 'ok'
                            : parcel.hoaStatus === 'present' ? 'bad' : 'warn'} />
           <DetailRow label="Structures"
@@ -179,7 +220,9 @@ export function ParcelDetail({ parcel, tribe, onBack }: ParcelDetailProps) {
             ...(ZONING_DETAILS_AVAILABLE
               ? [['Zoning', parcel.scoreBreakdown.zoning, TRIBE_SCORE_WEIGHTS[tribe].zoning]]
               : []),
-            ['Road access', parcel.scoreBreakdown.access,  TRIBE_SCORE_WEIGHTS[tribe].access],
+            ...(ROAD_ACCESS_AVAILABLE
+              ? [['Road access', parcel.scoreBreakdown.access, TRIBE_SCORE_WEIGHTS[tribe].access]]
+              : []),
             ['Water',       parcel.scoreBreakdown.water,   TRIBE_SCORE_WEIGHTS[tribe].water],
             ['Flood zone',  parcel.scoreBreakdown.flood,   TRIBE_SCORE_WEIGHTS[tribe].flood],
             ['HOA',         parcel.scoreBreakdown.hoa,     TRIBE_SCORE_WEIGHTS[tribe].hoa],
@@ -199,8 +242,8 @@ export function ParcelDetail({ parcel, tribe, onBack }: ParcelDetailProps) {
 
         <Section title="Resources for this lot">
           <div className="flex flex-col gap-1.5">
-            {AFFILIATE_RESOURCES.map(r => (
-              <a key={r.name} href="#"
+            {RESOURCES.map(r => (
+              <a key={r.name} href={r.href} target="_blank" rel="noopener noreferrer"
                  className="flex items-center gap-2.5 bg-white border border-border
                             rounded p-2 hover:border-tan transition-colors text-left">
                 <span className="text-lg flex-shrink-0">{r.icon}</span>
@@ -212,9 +255,6 @@ export function ParcelDetail({ parcel, tribe, onBack }: ParcelDetailProps) {
               </a>
             ))}
           </div>
-          <p className="text-[9px] text-ink-3 mt-2 leading-relaxed">
-            Some links above include referral arrangements. We only list what we would recommend regardless.
-          </p>
         </Section>
 
       </div>
@@ -222,13 +262,10 @@ export function ParcelDetail({ parcel, tribe, onBack }: ParcelDetailProps) {
       {/* CTAs */}
       <div className="px-3.5 py-3 border-t border-border bg-surface flex flex-col gap-2 flex-shrink-0"
            style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom, 12px))' }}>
-        <button className="h-9 w-full bg-accent text-white text-sm font-medium rounded
-                           hover:bg-accent/90 transition-colors">
+        {/* Owner contact needs the paywall, and saving lots needs accounts. Neither exists yet. */}
+        <button disabled
+                className="h-9 w-full bg-accent/40 text-white text-sm font-medium rounded cursor-not-allowed">
           Get owner contact info
-        </button>
-        <button className="h-9 w-full border border-border bg-transparent text-ink text-sm rounded
-                           hover:border-accent transition-colors">
-          Save this lot ♡
         </button>
       </div>
     </div>

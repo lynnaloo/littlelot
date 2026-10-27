@@ -5,6 +5,8 @@
  * The score is a composite of five dimensions:
  *   - Zoning legality  (30 pts for offgrid, 35 for foundation, etc.)
  *   - Road access      (20–30 pts depending on tribe)
+ * Zoning and road access are left out until the data exists (see the flags
+ * in types/parcel.ts), and the rest are scaled to 100.
  *   - Water/well potential (10–25 pts)
  *   - Flood zone clear (15 pts all tribes)
  *   - No HOA/CC&Rs     (10–15 pts)
@@ -16,18 +18,27 @@ import type {
   BuildTribe,
   ScoreBreakdown,
   FloodZone,
-  AccessType,
+  RoadAccess,
 } from '@/types/parcel'
-import { TRIBE_SCORE_WEIGHTS, ZONING_DETAILS_AVAILABLE } from '@/types/parcel'
+import {
+  TRIBE_SCORE_WEIGHTS,
+  ZONING_DETAILS_AVAILABLE,
+  ROAD_ACCESS_AVAILABLE,
+} from '@/types/parcel'
 
 // ── Acreage ──────────────────────────────────────────────────────────────────
 // calcarea is in square metres; taxacres is already in acres.
 
-const SQ_METRES_PER_ACRE = 4046.8564224
+export const SQ_METRES_PER_ACRE = 4046.8564224
 
-export function parcelAcres(attrs: ParcelAttributes): number {
+export function parcelAcres(attrs: Pick<ParcelAttributes, 'calcarea' | 'taxacres'>): number {
   if (attrs.calcarea != null) return attrs.calcarea / SQ_METRES_PER_ACRE
   return attrs.taxacres ?? 0
+}
+
+// Small lots matter to tiny home buyers, so show 0.25 rather than rounding to 0.3
+export function formatAcres(acres: number): string {
+  return acres < 1 ? acres.toFixed(2) : acres.toFixed(1)
 }
 
 // ── Zoning score ─────────────────────────────────────────────────────────────
@@ -66,10 +77,11 @@ function zoningScore(attrs: ParcelAttributes, tribe: BuildTribe): number {
 }
 
 // ── Access score ──────────────────────────────────────────────────────────────
+// Ready for road data. Nothing feeds it until ROAD_ACCESS_AVAILABLE is true.
 
-function accessScore(accesstype: AccessType, tribe: BuildTribe): number {
+function accessScore(road: RoadAccess, tribe: BuildTribe): number {
   const max = TRIBE_SCORE_WEIGHTS[tribe].access
-  switch (accesstype) {
+  switch (road) {
     case 'paved':       return max
     case 'gravel':      return tribe === 'thow' ? Math.round(max * 0.65) : Math.round(max * 0.80)
     case 'unimproved':  return tribe === 'thow' ? Math.round(max * 0.30) : Math.round(max * 0.55)
@@ -95,10 +107,8 @@ function waterScore(attrs: ParcelAttributes, tribe: BuildTribe): number {
     return Math.round(max * 0.30)
   }
 
-  // Other tribes: assume utility connection possible if road access exists
-  if (attrs.accesstype === 'paved' || attrs.accesstype === 'gravel') {
-    return Math.round(max * 0.75)
-  }
+  // Other tribes: utility hookup is likelier with road access, but we have
+  // no road data yet, so stay at the middle
   return Math.round(max * 0.50)
 }
 
@@ -140,21 +150,19 @@ function hoaScore(attrs: ParcelAttributes, tribe: BuildTribe): number {
 // ── Composite score ───────────────────────────────────────────────────────────
 
 export function computeScore(attrs: ParcelAttributes, tribe: BuildTribe): ScoreBreakdown {
-  const access = accessScore(attrs.accesstype, tribe)
+  const weights = TRIBE_SCORE_WEIGHTS[tribe]
+  // Dimensions we can't assess yet score 0 and drop out of the maximum,
+  // so the rest scale to 100 rather than guessing.
+  const zoning = ZONING_DETAILS_AVAILABLE ? zoningScore(attrs, tribe) : 0
+  const access = ROAD_ACCESS_AVAILABLE    ? accessScore('unknown', tribe) : 0
   const water  = waterScore(attrs, tribe)
   const flood  = floodScore(attrs.fldzone, tribe)
   const hoa    = hoaScore(attrs, tribe)
 
-  if (!ZONING_DETAILS_AVAILABLE) {
-    // We have the zoning code but not what it means: score the other four
-    // dimensions and scale to 100 rather than guessing from the code.
-    const max   = 100 - TRIBE_SCORE_WEIGHTS[tribe].zoning
-    const total = Math.round(((access + water + flood + hoa) / max) * 100)
-    return { zoning: 0, access, water, flood, hoa, total }
-  }
-
-  const zoning = zoningScore(attrs, tribe)
-  const total  = zoning + access + water + flood + hoa
+  const max = 100
+    - (ZONING_DETAILS_AVAILABLE ? 0 : weights.zoning)
+    - (ROAD_ACCESS_AVAILABLE    ? 0 : weights.access)
+  const total = Math.round(((zoning + access + water + flood + hoa) / max) * 100)
 
   return { zoning, access, water, flood, hoa, total }
 }
@@ -178,23 +186,23 @@ export function zoningPlainText(attrs: ParcelAttributes, tribe: BuildTribe): str
 
   if (combined.includes('agricultural') || /^a-?\d|^ag/.test(code.toLowerCase())) {
     if (tribe === 'thow') {
-      return `${code} — Agricultural. THOWs are typically classified as RVs here and require a special exception or CUP. Verify with county planning before purchasing.`
+      return `${code}: Agricultural. THOWs are typically classified as RVs here and require a special exception or CUP. Verify with county planning before purchasing.`
     }
-    return `${code} — Agricultural. Single-family dwellings are generally allowed; structures under 700 sq ft may require a conditional use permit. Verify with county planning.`
+    return `${code}: Agricultural. Single-family dwellings are generally allowed; structures under 700 sq ft may require a conditional use permit. Verify with county planning.`
   }
 
   if (/^r-?\d/.test(code.toLowerCase())) {
     if (tribe === 'thow') {
-      return `${code} — Residential. Most R-zones prohibit THOWs as permanent dwellings. This lot may work for a foundation build. Verify minimum square footage requirements.`
+      return `${code}: Residential. Most R-zones prohibit THOWs as permanent dwellings. This lot may work for a foundation build. Verify minimum square footage requirements.`
     }
-    return `${code} — Residential zoning. Check the minimum square footage requirement — many R-zones set a floor of 600–1,000 sq ft that can affect tiny home approval.`
+    return `${code}: Residential zoning. Check the minimum square footage requirement. Many R-zones set a floor of 600–1,000 sq ft that can affect tiny home approval.`
   }
 
   if (combined.includes('rural residential') || /^rr/.test(code.toLowerCase())) {
-    return `${code} — Rural Residential. Generally permissive for small dwellings. Verify tiny home or THOW rules with county planning.`
+    return `${code}: Rural Residential. Generally permissive for small dwellings. Verify tiny home or THOW rules with county planning.`
   }
 
-  return `${code}${desc ? ' — ' + desc : ''}. Zoning compatibility for tiny homes is unclear from code alone. Verify directly with county planning before purchasing.`
+  return `${code}${desc ? ': ' + desc : ''}. Zoning compatibility for tiny homes is unclear from code alone. Verify directly with county planning before purchasing.`
 }
 
 // ── Flood risk label ──────────────────────────────────────────────────────────
@@ -209,16 +217,16 @@ export function floodRiskLabel(fldzone: FloodZone): 'none' | 'moderate' | 'high'
 
 // ── Access type label ─────────────────────────────────────────────────────────
 
-export function accessLabel(accesstype: AccessType): string {
-  const labels: Record<AccessType, string> = {
+export function accessLabel(road: RoadAccess): string {
+  const labels: Record<RoadAccess, string> = {
     paved:       'Paved, public road',
     gravel:      'Gravel road',
     unimproved:  'Unimproved road',
     private:     'Private road',
     none:        'No road access',
-    unknown:     'Access unknown — verify',
+    unknown:     'Unknown, verify',
   }
-  return labels[accesstype] ?? 'Unknown'
+  return labels[road] ?? 'Unknown, verify'
 }
 
 // ── HOA status label ──────────────────────────────────────────────────────────
@@ -237,6 +245,7 @@ export function hoaStatusLabel(
 export function enrichParcel(
   attrs: ParcelAttributes,
   tribe: BuildTribe,
+  geometry: GeoJSON.Geometry | null = null,
   distanceToTown: number | null = null,
   nearestTown: string | null = null
 ): Parcel {
@@ -248,12 +257,13 @@ export function enrichParcel(
     acreage,
     isVacant:       (attrs.numbldgs ?? 0) === 0,
     floodRisk:      floodRiskLabel(attrs.fldzone),
-    accessLabel:    accessLabel(attrs.accesstype),
+    accessLabel:    accessLabel('unknown'), // no road data yet
     distanceToTown,
     nearestTown,
     readinessScore: scoreBreakdown.total,
     scoreBreakdown,
     zoningPlainText: zoningPlainText(attrs, tribe),
     hoaStatus:      hoaStatusLabel(attrs),
+    geometry,
   }
 }

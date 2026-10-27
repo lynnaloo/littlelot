@@ -15,7 +15,7 @@ export async function GET(
     if (!feature) {
       return NextResponse.json({ error: 'Lot not found' }, { status: 404 })
     }
-    const parcel = enrichParcel(feature.properties, tribe)
+    const parcel = enrichParcel(feature.properties, tribe, feature.geometry)
     return NextResponse.json(parcel)
   } catch (err) {
     console.error('[/api/parcel]', err)

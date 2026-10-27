@@ -2,29 +2,44 @@
 
 import { useState, useCallback } from 'react'
 import type { BuildTribe, SearchFilters, Parcel } from '@/types/parcel'
-import { TRIBE_LABELS } from '@/types/parcel'
+import { TRIBE_LABELS, TRIBE_MIN_ACRES } from '@/types/parcel'
 import { TribeGate } from './TribeGate'
 import { SearchTopbar } from './SearchTopbar'
 import { FilterSidebar } from './filters/FilterSidebar'
+import dynamic from 'next/dynamic'
 import { ParcelGrid } from './cards/ParcelGrid'
 import { ParcelDetail } from './cards/ParcelDetail'
 import { useParcelSearch } from '@/lib/useParcelSearch'
-import { usePlaceSearch } from '@/lib/usePlaceSearch'
+import { usePlaceSearch, type Place } from '@/lib/usePlaceSearch'
 
 type MobileTab = 'filters' | 'results' | 'detail'
+type ResultsView = 'list' | 'map'
 
-export function SearchApp() {
+// MapLibre needs the browser
+const MapView = dynamic(() => import('./map/MapView').then(m => m.MapView), { ssr: false })
+
+// Most buyers want vacant, dry land without an HOA, so start with these on
+const DEFAULT_FILTERS: Omit<SearchFilters, 'tribe'> = {
+  noStructures: true,
+  noFloodRisk:  true,
+  noHoa:        true,
+}
+
+export function SearchApp({ initialPlace = null }: { initialPlace?: Place | null }) {
   const [tribe, setTribe]               = useState<BuildTribe | null>(null)
-  const [filters, setFilters]           = useState<Omit<SearchFilters, 'tribe'>>({})
+  const [filters, setFilters]           = useState<Omit<SearchFilters, 'tribe'>>(DEFAULT_FILTERS)
   const [selectedParcel, setSelected]   = useState<Parcel | null>(null)
   const [mobileTab, setMobileTab]       = useState<MobileTab>('results')
+  const [view, setView]                 = useState<ResultsView>('list')
 
-  const { place, isLocating, locateError, search } = usePlaceSearch()
+  const { place, isLocating, locateError, search } = usePlaceSearch(initialPlace)
 
   const fullFilters: SearchFilters | null = tribe
     ? { tribe, ...filters, geoid: place?.geoid }
     : null
-  const { parcels, isLoading, error, needsLocation } = useParcelSearch(fullFilters)
+  const {
+    parcels, hasMore, isLoading, isLoadingMore, loadMore, error, needsLocation,
+  } = useParcelSearch(fullFilters)
 
   const handleSelectParcel = useCallback((parcel: Parcel) => {
     setSelected(parcel)
@@ -33,6 +48,7 @@ export function SearchApp() {
 
   const handleTribeSelect = useCallback((t: BuildTribe) => {
     setTribe(t)
+    setFilters(f => ({ ...f, minAcres: TRIBE_MIN_ACRES[t] }))
     setMobileTab('results')
   }, [])
 
@@ -52,6 +68,7 @@ export function SearchApp() {
       <SearchTopbar
         tribe={tribe}
         tribeLabel={TRIBE_LABELS[tribe]}
+        initialQuery={initialPlace?.label}
         onSwitchTribe={handleSwitchTribe}
         onSearch={(query) => { setSelected(null); search(query) }}
       />
@@ -85,22 +102,31 @@ export function SearchApp() {
                 : needsLocation ? 'Search for a county to see lots'
                 : isLoading ? 'Searching...'
                 : (
-                  // Count what's shown: score and acreage filters run after the API
-                  // returns, so the API's total can include lots we filtered out.
+                  // Count what's loaded. The API's total is before our HOA and
+                  // score checks, so it would overstate what buyers can see.
                   <>
-                    <strong className="text-ink font-semibold">{parcels.length}</strong> lots
-                    match in {place?.label}
+                    Showing <strong className="text-ink font-semibold">{parcels.length}</strong>
+                    {hasMore ? '' : ' matching'} lots in {place?.label}
                   </>
                 )}
             </span>
+            <div className="ml-auto flex border border-border rounded overflow-hidden text-xs">
+              {(['list', 'map'] as const).map(v => (
+                <button key={v} onClick={() => setView(v)}
+                        className={`h-7 px-2.5 capitalize ${view === v
+                          ? 'bg-accent text-white font-medium'
+                          : 'bg-white text-ink-2 hover:text-accent'}`}>
+                  {v}
+                </button>
+              ))}
+            </div>
             <select
-              className="ml-auto h-7 text-xs border border-border rounded px-2 bg-white text-ink"
+              className="h-7 text-xs border border-border rounded px-2 bg-white text-ink"
               onChange={e => setFilters(f => ({ ...f, sortBy: e.target.value as SearchFilters['sortBy'] }))}
             >
               <option value="score">Best match first</option>
               <option value="acres_desc">Largest lot</option>
               <option value="value_asc">Lowest assessed value</option>
-              <option value="town_dist">Closest to town</option>
             </select>
           </div>
 
@@ -116,20 +142,41 @@ export function SearchApp() {
             </div>
           )}
 
-          <ParcelGrid
-            parcels={parcels}
-            isLoading={isLoading}
-            needsLocation={needsLocation}
-            selectedLrid={selectedParcel?.lrid}
-            onSelect={handleSelectParcel}
-          />
+          {view === 'map' && !needsLocation ? (
+            <div className="flex-1 relative">
+              <MapView
+                parcels={parcels}
+                selectedLrid={selectedParcel?.lrid}
+                onSelect={handleSelectParcel}
+              />
+              {hasMore && (
+                <button onClick={loadMore} disabled={isLoadingMore}
+                        className="absolute bottom-6 left-1/2 -translate-x-1/2 h-9 px-4 bg-white
+                                   border border-border rounded shadow text-sm font-medium text-ink
+                                   hover:text-accent disabled:opacity-60 disabled:cursor-wait">
+                  {isLoadingMore ? 'Loading more lots...' : 'Show more lots'}
+                </button>
+              )}
+            </div>
+          ) : (
+            <ParcelGrid
+              parcels={parcels}
+              isLoading={isLoading}
+              needsLocation={needsLocation}
+              hasMore={hasMore}
+              isLoadingMore={isLoadingMore}
+              onLoadMore={loadMore}
+              selectedLrid={selectedParcel?.lrid}
+              onSelect={handleSelectParcel}
+            />
+          )}
         </div>
 
         {/* Detail panel */}
         <aside className={`
-          w-72 flex-shrink-0 bg-surface border-l border-border flex flex-col overflow-hidden
+          w-full md:w-72 flex-shrink-0 bg-surface border-l border-border flex-col overflow-hidden
           md:flex
-          ${mobileTab === 'detail' ? 'flex w-full' : 'hidden'}
+          ${mobileTab === 'detail' ? 'flex' : 'hidden'}
         `}>
           <ParcelDetail
             parcel={selectedParcel}

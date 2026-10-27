@@ -106,8 +106,8 @@ The Readiness Score is computed in `src/lib/scoring.ts`. It has five dimensions:
 | Dimension | Function | Notes |
 |---|---|---|
 | Zoning | `zoningScore()` | Best-effort from zoning code string. Most uncertain. |
-| Access | `accessScore()` | From `accesstype` field — reliable. |
-| Water | `waterScore()` | Proxied from acreage + access type. No direct well data. |
+| Access | `accessScore()` | Off until road data exists (`ROAD_ACCESS_AVAILABLE`). Not `accesstype`. |
+| Water | `waterScore()` | Proxied from acreage. No direct well data. |
 | Flood | `floodScore()` | From `fldzone` field — reliable. |
 | HOA | `hoaScore()` | Inferred from owner type + acreage. Uncertain. |
 
@@ -126,7 +126,7 @@ Key fields and their reliability:
 | Field | Reliability | Notes |
 |---|---|---|
 | `calcarea` | High | Square metres, not acres. Use `parcelAcres()` in `scoring.ts`. Prefer over `taxacres`. |
-| `accesstype` | High | Indexed field. Always present. |
+| `accesstype` | Medium | Indexed. Public access to the land (parks etc.): `OPEN`, `RESTRICTED`, `CLOSED`, `UNKNOWN`, or null. Not road access; the API has no road data. |
 | `fldzone` | High | FEMA flood zone. Always present. |
 | `zoningcode` | Medium | Present in most counties. Codes vary. |
 | `zoningdesc` | Low | County's name for the zone. Partial coverage, often missing. |
@@ -145,14 +145,19 @@ These are the known gaps. Pick up any of these without asking:
    to get a point, then the Census geocoder to get the county `geoid`. Needs
    `GOOGLE_MAPS_API_KEY`, server-side only, same rules as `LANDRECORDS_API_KEY`.
 
-2. **MapLibre map view:** The card thumbnails are SVG placeholders. Build a
-   `MapView` component using MapLibre GL JS that renders parcel polygons from
-   the vector tile proxy at `/api/tiles/{z}/{x}/{y}.pbf`. Use `lrid` as the
-   `promoteId`. Switch to raster tiles below zoom 14.
+2. **MapLibre map view:** Done. `src/components/map/MapView.tsx`: List/Map
+   toggle in search, plus a small map in `ParcelDetail`. Basemap is
+   OpenFreeMap (no key). Lot lines for the area come from the landrecords.us
+   raster tiles (zoom 13+); results are drawn from our own search response,
+   colored by score. The vector tile proxy at `/api/tiles/{z}/{x}/{y}.pbf`
+   works but the map doesn't use it yet.
+   Card thumbnails are still SVG placeholders.
 
-3. **County guide pages:** Static pages at `/guides/[state]/[county]` with
-   plain-language zoning summaries for specific counties. These are the primary
-   SEO surface. Start with the counties that appear in sample listings.
+3. **County guide pages:** Done as data-driven pages for all 3,222 counties
+   (`src/lib/counties.ts`, `src/lib/countyProfile.ts`), built on first visit
+   and refreshed weekly. They summarize a 100-lot sample: zoning codes, flood
+   share, lot sizes. Next: hand-written state guides, then plain-language
+   zoning for high-demand counties.
 
 4. **Owner contact paywall:** The "Get owner contact info" button in `ParcelDetail`
    needs to surface `ownername` and `owneraddr`. Gate it behind a credit or
@@ -161,14 +166,36 @@ These are the known gaps. Pick up any of these without asking:
 5. **Saved searches:** Persist search filters and allow email alerts when lots
    matching those filters change ownership. Requires auth.
 
+6. **Affiliate links (soon):** The "Resources for this lot" links in
+   `ParcelDetail` are plain links. Set up affiliate programs (insurance,
+   financing, solar, etc.), swap in referral links, and bring back a
+   referral disclosure under the list.
+
+7. **"Listed for sale" marker and filter (soon):** The lot data has no
+   listing fields. Needs a listings data vendor (RentCast, ATTOM,
+   Datafiniti) matched to lots by location, since vacant lots often have no
+   street address. Coverage will be partial, so label it "Listed for sale",
+   never "Available". Trial in one or two counties first.
+
 ---
 
 ## Running the project
 
 ```bash
 npm install
-cp .env.local.sample .env.local   # add LANDRECORDS_API_KEY
+cp .env.local.sample .env.local   # add LANDRECORDS_API_KEY and GOOGLE_MAPS_API_KEY
 npm run dev                        # http://localhost:3000
 npm run type-check                 # verify types before committing
 npm run build                      # full build check
 ```
+
+Hosted on Cloudflare Workers via the OpenNext adapter (`wrangler.jsonc`,
+`open-next.config.ts`). The adapter requires Next 15.5+.
+
+```bash
+npm run preview                    # build and run in the Workers runtime locally
+npm run deploy                     # build and deploy to Cloudflare
+```
+
+API keys live in Worker secrets (`npx wrangler secret put <NAME>`), never in
+`wrangler.jsonc`. Route handler `params` are async in Next 15: `await params`.

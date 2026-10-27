@@ -3,14 +3,23 @@
  *
  * Query params mirror SearchFilters:
  *   tribe, geoid, bbox, minAcres, maxAcres, maxLandValue,
- *   accessTypes, noHoa, noFloodRisk, noStructures,
- *   minScore, sortBy, page, pageSize
+ *   noHoa, noFloodRisk, noStructures,
+ *   minScore, sortBy, start
+ *
+ * Returns a SearchResult. Pass `next` back as `start` for more lots.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { fetchParcels } from '@/lib/landrecords'
+import { fetchParcelBatch } from '@/lib/landrecords'
 import { enrichParcel } from '@/lib/scoring'
-import type { SearchFilters, BuildTribe, AccessType } from '@/types/parcel'
+import type { SearchFilters, SearchResult, BuildTribe, Parcel } from '@/types/parcel'
+
+// Lots per batch (10 API requests in parallel, about a second)
+const BATCH_SIZE = 100
+// HOA and score checks run after the API, so a batch can come back thin.
+// Keep fetching until we have this many, up to MAX_BATCHES per request.
+const MIN_RESULTS = 20
+const MAX_BATCHES = 3
 
 export async function GET(req: NextRequest) {
   const p = req.nextUrl.searchParams
@@ -26,16 +35,12 @@ export async function GET(req: NextRequest) {
     minAcres:     p.has('minAcres')     ? Number(p.get('minAcres'))     : undefined,
     maxAcres:     p.has('maxAcres')     ? Number(p.get('maxAcres'))     : undefined,
     maxLandValue: p.has('maxLandValue') ? Number(p.get('maxLandValue')) : undefined,
-    accessTypes:  p.has('accessTypes')
-                    ? (p.get('accessTypes')!.split(',') as AccessType[])
-                    : undefined,
     noHoa:        p.get('noHoa') === 'true',
     noFloodRisk:  p.get('noFloodRisk') === 'true',
     noStructures: p.get('noStructures') === 'true',
     minScore:     p.has('minScore')  ? Number(p.get('minScore'))  : undefined,
     sortBy:       (p.get('sortBy') ?? 'score') as SearchFilters['sortBy'],
-    page:         p.has('page')      ? Number(p.get('page'))      : 0,
-    pageSize:     p.has('pageSize')  ? Number(p.get('pageSize'))  : 10,
+    start:        p.has('start')     ? Number(p.get('start'))     : 0,
   }
 
   if (!filters.geoid && !filters.bbox) {
@@ -46,46 +51,36 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const { features, total } = await fetchParcels(filters)
+    const parcels: Parcel[] = []
+    let matched: number | null = null
+    let next: number | null = filters.start ?? 0
 
-    // Enrich each parcel with score, plain-text zoning, etc.
-    let parcels = features.map(f => enrichParcel(f.properties, tribe))
-
-    // Client-side acreage filter (WFS calcarea filter is expensive)
-    if (filters.minAcres) {
-      parcels = parcels.filter(p => p.acreage >= filters.minAcres!)
-    }
-    if (filters.maxAcres) {
-      parcels = parcels.filter(p => p.acreage <= filters.maxAcres!)
-    }
-
-    // Score filter
-    if (filters.minScore) {
-      parcels = parcels.filter(p => p.readinessScore >= filters.minScore!)
+    for (let i = 0; i < MAX_BATCHES && next != null && parcels.length < MIN_RESULTS; i++) {
+      const batch = await fetchParcelBatch(filters, next, BATCH_SIZE)
+      matched ??= batch.matched
+      next      = batch.next
+      parcels.push(...applyChecks(
+        batch.features.map(f => enrichParcel(f.properties, tribe, f.geometry)),
+        filters
+      ))
     }
 
-    // Sort
+    // Sort within what we fetched. Largest lot, and lowest value when the
+    // query has room for it, are already sorted by the API across the county.
     switch (filters.sortBy) {
-      case 'score':
-        parcels.sort((a, b) => b.readinessScore - a.readinessScore)
-        break
       case 'acres_desc':
         parcels.sort((a, b) => b.acreage - a.acreage)
         break
       case 'value_asc':
-        parcels.sort((a, b) => (a.landvalue ?? 0) - (b.landvalue ?? 0))
+        // Lots with no value on record go last
+        parcels.sort((a, b) => (a.landvalue || Infinity) - (b.landvalue || Infinity))
         break
-      case 'town_dist':
-        parcels.sort((a, b) => (a.distanceToTown ?? 999) - (b.distanceToTown ?? 999))
-        break
+      default:
+        parcels.sort((a, b) => b.readinessScore - a.readinessScore)
     }
 
-    return NextResponse.json({
-      parcels,
-      total,
-      page:     filters.page,
-      pageSize: filters.pageSize,
-    })
+    const result: SearchResult = { parcels, matched, next }
+    return NextResponse.json(result)
   } catch (err) {
     console.error('[/api/parcels]', err)
     return NextResponse.json(
@@ -93,4 +88,19 @@ export async function GET(req: NextRequest) {
       { status: 500 }
     )
   }
+}
+
+// Backstops for filters the query may have dropped (3-predicate limit) or
+// couldn't apply (lots with no calcarea fall back to taxacres), plus the
+// checks only we can do (HOA, score)
+function applyChecks(parcels: Parcel[], filters: SearchFilters): Parcel[] {
+  return parcels.filter(p =>
+    (!filters.minAcres     || p.acreage >= filters.minAcres) &&
+    (!filters.maxAcres     || p.acreage <= filters.maxAcres) &&
+    (!filters.maxLandValue || (p.landvalue != null && p.landvalue <= filters.maxLandValue)) &&
+    // We can't confirm "no HOA" for most lots, so drop only lots known to
+    // have CC&Rs. Unknown lots stay and are labeled "verify".
+    (!filters.noHoa        || p.hoaStatus !== 'present') &&
+    (!filters.minScore     || p.readinessScore >= filters.minScore)
+  )
 }

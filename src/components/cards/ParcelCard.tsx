@@ -1,7 +1,9 @@
 'use client'
 
 import type { Parcel } from '@/types/parcel'
+import { ROAD_ACCESS_AVAILABLE } from '@/types/parcel'
 import { ScorePill } from '../ui/ScorePill'
+import { formatAcres } from '@/lib/scoring'
 
 interface ParcelCardProps {
   parcel: Parcel
@@ -32,16 +34,16 @@ function AttrRow({
 }
 
 export function ParcelCard({ parcel, isSelected, onSelect }: ParcelCardProps) {
-  const acreage   = parcel.acreage.toFixed(1)
-  const location  = [parcel.placename, parcel.countyfp].filter(Boolean).join(', ')
+  const acreage   = formatAcres(parcel.acreage)
+  const location  = [parcel.placename, parcel.countyname, parcel.parcelstate].filter(Boolean).join(', ')
 
   const floodStatus = parcel.floodRisk === 'none' ? 'ok'
                     : parcel.floodRisk === 'moderate' ? 'warn'
                     : 'bad'
 
-  const floodLabel = parcel.floodRisk === 'none' ? `Zone ${parcel.fldzone} — clear`
-                   : parcel.fldzone === 'unknown' ? 'Zone unknown — verify'
-                   : `Zone ${parcel.fldzone} — risk`
+  const floodLabel = parcel.floodRisk === 'none' ? `Zone ${parcel.fldzone}, clear`
+                   : parcel.fldzone === 'unknown' ? 'Zone unknown, verify'
+                   : `Zone ${parcel.fldzone}, risk`
 
   const hoaStatus = parcel.hoaStatus === 'none' ? 'ok'
                   : parcel.hoaStatus === 'present' ? 'bad'
@@ -49,7 +51,7 @@ export function ParcelCard({ parcel, isSelected, onSelect }: ParcelCardProps) {
 
   const hoaLabel = parcel.hoaStatus === 'none' ? 'None on record'
                  : parcel.hoaStatus === 'present' ? 'CC&Rs present'
-                 : 'Unknown — verify'
+                 : 'Unknown, verify'
 
   return (
     <button
@@ -82,10 +84,9 @@ export function ParcelCard({ parcel, isSelected, onSelect }: ParcelCardProps) {
         <div className="text-[11px] text-ink-3 mb-2.5">{location}</div>
 
         <div className="flex flex-col gap-1 mb-3">
-          <AttrRow label="Road access" value={parcel.accessLabel}
-                   status={parcel.accesstype === 'paved' ? 'ok'
-                         : parcel.accesstype === 'gravel' ? 'ok'
-                         : parcel.accesstype === 'none' ? 'bad' : 'warn'} />
+          {ROAD_ACCESS_AVAILABLE && (
+            <AttrRow label="Road access" value={parcel.accessLabel} status="warn" />
+          )}
           <AttrRow label="Flood zone" value={floodLabel} status={floodStatus} />
           <AttrRow label="HOA / CC&Rs" value={hoaLabel} status={hoaStatus} />
           <AttrRow label="Structures"

@@ -10,6 +10,9 @@
  * GOOGLE_MAPS_API_KEY is server-side only. Call this from API routes.
  */
 
+import { unstable_cache } from 'next/cache'
+import { allCounties, countyLabel, type County } from '@/lib/counties'
+
 const GOOGLE_KEY = process.env.GOOGLE_MAPS_API_KEY
 
 const GOOGLE_URL = 'https://maps.googleapis.com/maps/api/geocode/json'
@@ -29,6 +32,7 @@ export class GeocodeError extends Error {
 }
 
 interface GoogleComponent {
+  long_name: string
   short_name: string
   types: string[]
 }
@@ -42,7 +46,7 @@ interface GoogleResult {
 // A whole state covers many counties, so a single point would pick one at random
 const TOO_BROAD = ['administrative_area_level_1']
 
-export async function geocodeToCounty(query: string): Promise<GeocodeResult> {
+async function lookup(query: string): Promise<GeocodeResult> {
   if (!GOOGLE_KEY) {
     throw new GeocodeError('GOOGLE_MAPS_API_KEY is not set', 500)
   }
@@ -52,9 +56,9 @@ export async function geocodeToCounty(query: string): Promise<GeocodeResult> {
     components: 'country:US',
     key:        GOOGLE_KEY,
   })
-  const gRes = await fetch(`${GOOGLE_URL}?${googleParams}`, {
-    next: { revalidate: 86400 }, // places don't move, cache for 24h
-  })
+  // Not cached here: a bad response would stick for a day. Successful
+  // lookups are cached as a whole below.
+  const gRes = await fetch(`${GOOGLE_URL}?${googleParams}`, { cache: 'no-store' })
   if (!gRes.ok) {
     throw new GeocodeError(`Google geocode error: ${gRes.status}`, 502)
   }
@@ -77,7 +81,30 @@ export async function geocodeToCounty(query: string): Promise<GeocodeResult> {
   }
 
   const { lat, lng } = place.geometry.location
-  const censusParams = new URLSearchParams({
+  const component = (type: string) =>
+    place.address_components.find(c => c.types.includes(type))
+  const state = component('administrative_area_level_1')?.short_name
+
+  // Google usually names the county, so match it against our list. Fall back
+  // to the Census geocoder (by point) for places it doesn't, like
+  // independent cities.
+  const countyName = component('administrative_area_level_2')?.long_name
+  const county = (state && countyName ? findByName(state, countyName) : undefined)
+    ?? await countyAtPoint(lat, lng)
+
+  return { geoid: county.geoid, label: countyLabel(county), lat, lng }
+}
+
+const normalize = (name: string) =>
+  name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+
+function findByName(state: string, name: string): County | undefined {
+  const wanted = normalize(name)
+  return allCounties().find(c => c.state === state && normalize(c.name) === wanted)
+}
+
+async function countyAtPoint(lat: number, lng: number): Promise<County> {
+  const params = new URLSearchParams({
     x:         String(lng),
     y:         String(lat),
     benchmark: 'Public_AR_Current',
@@ -85,27 +112,26 @@ export async function geocodeToCounty(query: string): Promise<GeocodeResult> {
     layers:    'Counties',
     format:    'json',
   })
-  const cRes = await fetch(`${CENSUS_URL}?${censusParams}`, {
-    next: { revalidate: 86400 },
-  })
-  if (!cRes.ok) {
-    throw new GeocodeError(`Census geocode error: ${cRes.status}`, 502)
-  }
 
-  const cJson = await cRes.json()
-  const county = cJson?.result?.geographies?.Counties?.[0] as
-    { GEOID: string; NAME: string } | undefined
-  if (!county) {
-    throw new GeocodeError('No county found for that place', 404)
+  // The Census service is flaky from Cloudflare (HTML error pages), so try twice
+  let lastError = new GeocodeError('Census geocode error', 502)
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const res = await fetch(`${CENSUS_URL}?${params}`, { cache: 'no-store' })
+    const json = res.ok ? await res.json().catch(() => null) : null
+    if (!json) {
+      lastError = new GeocodeError(`Census geocode error: ${res.status}`, 502)
+      continue
+    }
+    const geoid = json.result?.geographies?.Counties?.[0]?.GEOID as string | undefined
+    const county = geoid ? allCounties().find(c => c.geoid === geoid) : undefined
+    if (!county) {
+      throw new GeocodeError('No county found for that place', 404)
+    }
+    return county
   }
-
-  const state = place.address_components
-    .find(c => c.types.includes('administrative_area_level_1'))?.short_name
-
-  return {
-    geoid: county.GEOID,
-    label: state ? `${county.NAME}, ${state}` : county.NAME,
-    lat,
-    lng,
-  }
+  throw lastError
 }
+
+// Places don't move, so cache each answer for a day. Errors throw and are
+// never cached, so a hiccup at Google or Census doesn't stick.
+export const geocodeToCounty = unstable_cache(lookup, ['geocode-v2'], { revalidate: 86400 })

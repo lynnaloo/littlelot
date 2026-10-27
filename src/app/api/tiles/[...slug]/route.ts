@@ -2,8 +2,8 @@
  * Tile proxy — forwards MapLibre tile requests to landrecords.us
  * with the API key injected server-side as a Bearer token.
  *
- * Vector tiles:  /api/tiles/{z}/{x}/{y}.pbf
- * Raster tiles:  /api/tiles/raster/{z}/{x}/{y}.png
+ * Raster tiles:  /api/tiles/raster/{z}/{x}/{y}.png  (lot lines, 512px)
+ * Vector tiles:  /api/tiles/{z}/{x}/{y}.pbf  (layer "parcels", promoteId lrid)
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -40,7 +40,8 @@ export async function GET(
     return new NextResponse(null, { status: res.status })
   }
 
-  const contentType = res.headers.get('content-type') ?? 'application/octet-stream'
+  // Upstream says "image/png8", which isn't a real type; the bytes are PNG
+  const contentType = slug[0] === 'raster' ? 'image/png' : 'application/x-protobuf'
   const body = await res.arrayBuffer()
 
   return new NextResponse(body, {

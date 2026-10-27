@@ -82,9 +82,9 @@ export default function HomePage() {
               <div className="grid grid-cols-2 gap-2">
                 {[
                   ['Zoning',      'AG-1, details soon', 'warn'],
-                  ['Road access', 'Paved, public',      'ok'],
-                  ['Flood zone',  'Zone X — clear',     'ok'],
+                  ['Flood zone',  'Zone X, clear',     'ok'],
                   ['HOA',         'None on record',      'ok'],
+                  ['Structures',  'None, vacant',        'ok'],
                 ].map(([label, val, status]) => (
                   <div key={label} className="bg-surface rounded p-2">
                     <div className="text-[10px] text-ink-3 mb-0.5">{label}</div>
@@ -151,7 +151,6 @@ export default function HomePage() {
             <div className="flex flex-col gap-3">
               {[
                 { label: 'Zoning legality',    pts: 30, pct: 60, soon: true },
-                { label: 'Road access',         pts: 20, pct: 40 },
                 { label: 'Water / well',        pts: 20, pct: 40 },
                 { label: 'Flood zone clear',    pts: 15, pct: 30 },
                 { label: 'No HOA / CC&Rs',      pts: 15, pct: 30 },
@@ -173,7 +172,7 @@ export default function HomePage() {
             <p className="text-xs text-ink-3 mt-6 leading-relaxed max-w-sm">
               <strong className="text-ink">A note on certainty:</strong>{' '}
               We show each lot&apos;s zoning code, but plain-language zoning is coming
-              soon. Until then, the score is based on the other four factors, so check
+              soon. Until then, the score is based on the other three factors, so check
               what the code allows with county planning yourself. We flag
               uncertain fields and always link to the county planning office. Never rely solely on this score to make a purchase decision.
             </p>
@@ -182,11 +181,11 @@ export default function HomePage() {
           <div className="flex flex-col gap-3">
             {[
               { score: 91, label: 'Strong match', title: '14.7 acres, Shenandoah, VA',
-                desc: 'Paved public road, Zone X flood, no HOA on record. Strong match for off-grid homestead.' },
+                desc: 'Vacant, Zone X flood, no HOA on record. Room for a well and septic. Strong match for off-grid homestead.' },
               { score: 63, label: 'Check details', title: '5.2 acres, Stanley, VA',
-                desc: 'Gravel private road, so trailer delivery may be difficult. Small lot for a well and septic.' },
+                desc: 'Owned by an LLC, so CC&Rs are possible. Check before you buy. Tight for a well and septic.' },
               { score: 41, label: 'Ask hard questions', title: '2.8 acres, Luray, VA',
-                desc: 'Zone AE flood risk. CC&Rs present — likely prohibit structures under 700 sq ft.' },
+                desc: 'Zone AE flood risk. CC&Rs present, likely prohibit structures under 700 sq ft.' },
             ].map(ex => (
               <div key={ex.score}
                 className="bg-white border border-border rounded-lg p-4 flex items-start gap-4">
@@ -215,6 +214,15 @@ export default function HomePage() {
           Start searching
         </Link>
       </section>
+
+      <footer className="bg-white border-t border-border px-[5%] py-6 text-center text-xs text-ink-3">
+        Lot information powered by{' '}
+        <a href="https://landrecords.us" target="_blank" rel="noopener noreferrer"
+           className="text-accent font-medium hover:underline">
+          landrecords.us
+        </a>
+        , covering every county in the US.
+      </footer>
     </main>
   )
 }

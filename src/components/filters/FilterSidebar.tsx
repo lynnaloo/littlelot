@@ -1,7 +1,11 @@
 'use client'
 
-import type { BuildTribe, SearchFilters, AccessType } from '@/types/parcel'
-import { TRIBE_SCORE_WEIGHTS, ZONING_DETAILS_AVAILABLE } from '@/types/parcel'
+import type { BuildTribe, SearchFilters, RoadAccess } from '@/types/parcel'
+import {
+  TRIBE_SCORE_WEIGHTS,
+  ZONING_DETAILS_AVAILABLE,
+  ROAD_ACCESS_AVAILABLE,
+} from '@/types/parcel'
 
 interface FilterSidebarProps {
   tribe: BuildTribe
@@ -9,7 +13,7 @@ interface FilterSidebarProps {
   onChange: (filters: Omit<SearchFilters, 'tribe'>) => void
 }
 
-const ACCESS_TYPES: { value: AccessType; label: string }[] = [
+const ROAD_ACCESS: { value: RoadAccess; label: string }[] = [
   { value: 'paved',      label: 'Paved' },
   { value: 'gravel',     label: 'Gravel' },
   { value: 'unimproved', label: 'Unimproved' },
@@ -58,7 +62,7 @@ export function FilterSidebar({ tribe, filters, onChange }: FilterSidebarProps) 
           )}
           {[
             ...(ZONING_DETAILS_AVAILABLE ? [['Zoning legality', weights.zoning]] : []),
-            ['Road access',     weights.access],
+            ...(ROAD_ACCESS_AVAILABLE    ? [['Road access',     weights.access]] : []),
             ['Water / well',    weights.water],
             ['Flood zone',      weights.flood],
             ['No HOA',          weights.hoa],
@@ -90,14 +94,14 @@ export function FilterSidebar({ tribe, filters, onChange }: FilterSidebarProps) 
         <div className="flex gap-2">
           <div className="flex-1">
             <label className="text-[10px] text-ink-3 block mb-1">Min</label>
-            <input type="number" min={0} placeholder="0"
+            <input type="number" min={0} step={0.05} placeholder="0"
                    value={filters.minAcres ?? ''}
                    onChange={e => set('minAcres', e.target.value ? Number(e.target.value) : undefined)}
                    className="w-full h-7 border border-border rounded px-2 text-xs bg-white text-ink" />
           </div>
           <div className="flex-1">
             <label className="text-[10px] text-ink-3 block mb-1">Max</label>
-            <input type="number" min={0} placeholder="Any"
+            <input type="number" min={0} step={0.05} placeholder="Any"
                    value={filters.maxAcres ?? ''}
                    onChange={e => set('maxAcres', e.target.value ? Number(e.target.value) : undefined)}
                    className="w-full h-7 border border-border rounded px-2 text-xs bg-white text-ink" />
@@ -125,34 +129,39 @@ export function FilterSidebar({ tribe, filters, onChange }: FilterSidebarProps) 
 
       <Divider />
 
-      <Group title="Road access">
-        <div className="flex flex-wrap gap-1.5">
-          {ACCESS_TYPES.map(({ value, label }) => {
-            const selected = filters.accessTypes?.includes(value)
-            return (
-              <button
-                key={value}
-                onClick={() => {
-                  const current = filters.accessTypes ?? []
-                  set('accessTypes', selected
-                    ? current.filter(a => a !== value)
-                    : [...current, value]
-                  )
-                }}
-                className={`px-2.5 py-1 rounded-full border text-xs transition-all
-                  ${selected
-                    ? 'bg-accent-lt border-accent text-accent font-medium'
-                    : 'bg-white border-border text-ink-2 hover:border-accent/50'
-                  }`}
-              >
-                {label}
-              </button>
-            )
-          })}
-        </div>
-      </Group>
-
-      <Divider />
+      {/* Hidden until road data exists. accesstype is public access, not roads.
+          Wire roadAccess into the search query before turning this on. */}
+      {ROAD_ACCESS_AVAILABLE && (
+        <>
+          <Group title="Road access">
+            <div className="flex flex-wrap gap-1.5">
+              {ROAD_ACCESS.map(({ value, label }) => {
+                const selected = filters.roadAccess?.includes(value)
+                return (
+                  <button
+                    key={value}
+                    onClick={() => {
+                      const current = filters.roadAccess ?? []
+                      set('roadAccess', selected
+                        ? current.filter(a => a !== value)
+                        : [...current, value]
+                      )
+                    }}
+                    className={`px-2.5 py-1 rounded-full border text-xs transition-all
+                      ${selected
+                        ? 'bg-accent-lt border-accent text-accent font-medium'
+                        : 'bg-white border-border text-ink-2 hover:border-accent/50'
+                      }`}
+                  >
+                    {label}
+                  </button>
+                )
+              })}
+            </div>
+          </Group>
+          <Divider />
+        </>
+      )}
 
       <Group title="Assessed land value">
         <div className="flex justify-between text-xs text-ink-2 mb-1">

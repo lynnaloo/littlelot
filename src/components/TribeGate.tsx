@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import type { BuildTribe } from '@/types/parcel'
 import { LogoMark } from './ui/LogoMark'
 
@@ -36,7 +37,11 @@ interface TribeGateProps {
 
 export function TribeGate({ onSelect }: TribeGateProps) {
   return (
-    <div className="min-h-screen bg-ink flex flex-col">
+    <div className="min-h-screen bg-ink flex flex-col relative">
+      <Link href="/"
+            className="absolute top-3 left-4 z-10 text-xs text-tan hover:text-tan-lt transition-colors">
+        ← Home
+      </Link>
       {/* terrain illustration */}
       <div className="relative w-full flex-shrink-0" style={{ height: '52vh', minHeight: 260 }}>
         <svg

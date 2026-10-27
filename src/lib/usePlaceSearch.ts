@@ -13,8 +13,8 @@ interface UsePlaceSearchResult {
 }
 
 // Resolves what the buyer typed into a county via /api/geocode
-export function usePlaceSearch(): UsePlaceSearchResult {
-  const [place, setPlace]             = useState<Place | null>(null)
+export function usePlaceSearch(initialPlace: Place | null = null): UsePlaceSearchResult {
+  const [place, setPlace]             = useState<Place | null>(initialPlace)
   const [isLocating, setIsLocating]   = useState(false)
   const [locateError, setLocateError] = useState<string | null>(null)
 

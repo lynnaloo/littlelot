@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { LogoMark } from './ui/LogoMark'
 import type { BuildTribe } from '@/types/parcel'
 
@@ -9,21 +10,23 @@ interface SearchTopbarProps {
   tribeLabel: string
   onSwitchTribe: () => void
   onSearch: (query: string) => void
+  initialQuery?: string
 }
 
 export function SearchTopbar({
   tribeLabel,
   onSwitchTribe,
   onSearch,
+  initialQuery = '',
 }: SearchTopbarProps) {
-  const [query, setQuery] = useState('Page County, VA')
+  const [query, setQuery] = useState(initialQuery)
 
   return (
     <header className="h-12 bg-ink flex items-center px-3 gap-3 flex-shrink-0 border-b border-white/10">
-      <div className="flex items-center gap-2">
+      <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
         <LogoMark size={22} variant="reversed" />
         <span className="font-serif text-tan-lt text-base hidden sm:block">the little lot</span>
-      </div>
+      </Link>
 
       {/* tribe pill */}
       <button
@@ -52,12 +55,7 @@ export function SearchTopbar({
         />
       </form>
 
-      <button
-        className="ml-auto h-7 px-3 bg-accent text-white text-xs font-medium
-                   rounded hover:bg-accent/90 transition-colors hidden sm:flex items-center"
-      >
-        Save search
-      </button>
+      {/* "Save search" returns once accounts exist (needs login) */}
     </header>
   )
 }
