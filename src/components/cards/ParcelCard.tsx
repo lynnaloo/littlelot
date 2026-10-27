@@ -3,7 +3,9 @@
 import type { Parcel } from '@/types/parcel'
 import { ROAD_ACCESS_AVAILABLE } from '@/types/parcel'
 import { ScorePill } from '../ui/ScorePill'
+import { LotShape } from './LotShape'
 import { formatAcres } from '@/lib/scoring'
+import { ZONE_TYPE_LABELS, UNLIKELY_ZONE_TYPES } from '@/lib/zoning'
 
 interface ParcelCardProps {
   parcel: Parcel
@@ -60,16 +62,8 @@ export function ParcelCard({ parcel, isSelected, onSelect }: ParcelCardProps) {
                   transition-all hover:border-accent w-full
                   ${isSelected ? 'border-accent border-2 shadow-sm' : 'border-border'}`}
     >
-      {/* map thumb placeholder -- replaced with real MapLibre snapshot later */}
       <div className="h-24 bg-[#b8ceac] relative overflow-hidden">
-        <svg viewBox="0 0 280 96" className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
-          <rect width="280" height="96" fill="#b8ceac"/>
-          <path d="M0 75 Q60 55 130 68 Q185 48 250 62 L280 66 L280 96 L0 96Z"
-                fill="#8ab882" opacity=".6"/>
-          <rect x="60" y="18" width="130" height="58" rx="3"
-                fill="none" stroke="#4A7C59" strokeWidth="2"/>
-          <rect x="62" y="20" width="126" height="54" rx="2" fill="#4A7C5920"/>
-        </svg>
+        <LotShape geometry={parcel.geometry} />
         <div className="absolute top-2 left-2">
           <ScorePill score={parcel.readinessScore} />
         </div>
@@ -87,6 +81,9 @@ export function ParcelCard({ parcel, isSelected, onSelect }: ParcelCardProps) {
           {ROAD_ACCESS_AVAILABLE && (
             <AttrRow label="Road access" value={parcel.accessLabel} status="warn" />
           )}
+          <AttrRow label="Zoning"
+                   value={parcel.zoningcode ? `${ZONE_TYPE_LABELS[parcel.zoneType]}, verify` : 'Unknown, verify'}
+                   status={UNLIKELY_ZONE_TYPES.includes(parcel.zoneType) ? 'bad' : 'warn'} />
           <AttrRow label="Flood zone" value={floodLabel} status={floodStatus} />
           <AttrRow label="HOA / CC&Rs" value={hoaLabel} status={hoaStatus} />
           <AttrRow label="Structures"

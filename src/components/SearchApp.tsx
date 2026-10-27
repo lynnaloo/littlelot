@@ -96,8 +96,10 @@ export function SearchApp({ initialPlace = null }: { initialPlace?: Place | null
           ${mobileTab === 'results' ? 'flex' : 'hidden'}
         `}>
           {/* Results bar */}
-          <div className="flex items-center gap-3 px-3.5 h-10 bg-white border-b border-border flex-shrink-0">
-            <span className="text-sm text-ink-2">
+          {/* Wraps on phones: status on top, view toggle and sort below */}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-3.5 py-1.5 min-h-10
+                          bg-white border-b border-border flex-shrink-0">
+            <span className="text-sm text-ink-2 w-full sm:w-auto sm:flex-1 min-w-0 truncate">
               {isLocating ? 'Finding that place...'
                 : needsLocation ? 'Search for a county to see lots'
                 : isLoading ? 'Searching...'
@@ -110,7 +112,7 @@ export function SearchApp({ initialPlace = null }: { initialPlace?: Place | null
                   </>
                 )}
             </span>
-            <div className="ml-auto flex border border-border rounded overflow-hidden text-xs">
+            <div className="flex flex-shrink-0 border border-border rounded overflow-hidden text-xs">
               {(['list', 'map'] as const).map(v => (
                 <button key={v} onClick={() => setView(v)}
                         className={`h-7 px-2.5 capitalize ${view === v
@@ -121,7 +123,7 @@ export function SearchApp({ initialPlace = null }: { initialPlace?: Place | null
               ))}
             </div>
             <select
-              className="h-7 text-xs border border-border rounded px-2 bg-white text-ink"
+              className="h-7 ml-auto sm:ml-0 flex-shrink-0 text-xs border border-border rounded px-2 bg-white text-ink"
               onChange={e => setFilters(f => ({ ...f, sortBy: e.target.value as SearchFilters['sortBy'] }))}
             >
               <option value="score">Best match first</option>

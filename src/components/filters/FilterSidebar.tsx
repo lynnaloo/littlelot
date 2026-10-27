@@ -77,6 +77,12 @@ export function FilterSidebar({ tribe, filters, onChange }: FilterSidebarProps) 
               </div>
             </div>
           ))}
+          {ZONING_DETAILS_AVAILABLE && (
+            <p className="text-[10px] text-ink-3 leading-snug mt-1">
+              Zoning points are a best guess from the zone type (farm, rural, residential,
+              commercial). No lot gets full zoning points until we confirm the county's rules.
+            </p>
+          )}
         </div>
         <div className="flex justify-between text-xs text-ink-2 mb-1">
           <span>Minimum score</span>

@@ -119,7 +119,7 @@ function buildCqlQuery(filters: SearchFilters): CqlQuery {
 const ATTRIBUTE_NAMES: (keyof ParcelAttributes)[] = [
   'lrid','parcelid','geoid','statefp','countyfp',
   'ownername','owneraddr','parceladdr','countyname','parcelstate',
-  'usecode','usedesc','zoningcode','zoningdesc',
+  'usecode','usedesc','zoningcode','zoningdesc','zoningurl',
   'taxacres','calcarea','landvalue','imprvalue',
   'numbldgs','bldgsqft','yearbuilt','saleamt','saledate',
   'ownertype','accesstype','fldzone',

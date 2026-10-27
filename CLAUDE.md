@@ -105,7 +105,7 @@ The Readiness Score is computed in `src/lib/scoring.ts`. It has five dimensions:
 
 | Dimension | Function | Notes |
 |---|---|---|
-| Zoning | `zoningScore()` | Best-effort from zoning code string. Most uncertain. |
+| Zoning | `zoningScore()` | From the zone type (`src/lib/zoning.ts` reads the code prefix). Capped below full points until a county's rules are checked by hand. Most uncertain. |
 | Access | `accessScore()` | Off until road data exists (`ROAD_ACCESS_AVAILABLE`). Not `accesstype`. |
 | Water | `waterScore()` | Proxied from acreage. No direct well data. |
 | Flood | `floodScore()` | From `fldzone` field — reliable. |

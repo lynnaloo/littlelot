@@ -36,6 +36,20 @@ export type OwnerType =
   | 'NONPROFIT'
   | 'GOVERNMENT'
 
+// Broad zone type read from the zoning code (lib/zoning.ts). Not a ruling on
+// what the zone allows: codes mean different things in different counties.
+export type ZoneType =
+  | 'agricultural'
+  | 'rural'
+  | 'unzoned'
+  | 'manufactured'
+  | 'residential'
+  | 'planned'
+  | 'commercial'
+  | 'industrial'
+  | 'public'
+  | 'unknown'
+
 export type BuildTribe = 'thow' | 'foundation' | 'offgrid' | 'community'
 
 // Raw parcel attributes as returned by the landrecords.us WFS / tile API
@@ -55,6 +69,7 @@ export interface ParcelAttributes {
   usedesc: string           // human-readable use description
   zoningcode: string | null
   zoningdesc: string | null // partial coverage, missing in some counties
+  zoningurl: string | null  // zoningcode.link page for this district (opens on zoneoptics.us)
   taxacres: number | null   // acreage from tax records (less reliable)
   calcarea: number | null   // square metres, calculated from geometry (preferred)
   landvalue: number | null  // assessed land value
@@ -90,6 +105,7 @@ export interface Parcel extends ParcelAttributes {
   readinessScore: number    // 0–100, tribe-weighted composite
   scoreBreakdown: ScoreBreakdown
   zoningPlainText: string   // plain-English zoning summary
+  zoneType: ZoneType
   hoaStatus: 'none' | 'present' | 'unknown'
   geometry: GeoJSON.Geometry | null   // lot outline, longitude/latitude
 }
@@ -127,12 +143,11 @@ export interface SearchResult {
   next: number | null     // pass as SearchFilters.start for more lots; null when there are no more
 }
 
-// The API has zoning codes and, in some counties, the county's name for the
-// code (zoningdesc), but nothing about what a zone allows for tiny homes.
-// While false, we show the code and description as-is, mark the plain-language
-// summary "coming soon", leave zoning out of the score, and scale the remaining
-// dimensions up to 100.
-export const ZONING_DETAILS_AVAILABLE = false
+// The API has zoning codes but nothing about what a zone allows for tiny
+// homes. While true, zoning is scored from the zone type alone (see
+// ZONE_TYPE_SCORES in lib/scoring.ts), capped below full points because
+// nothing is confirmed. Set false to leave zoning out and show "coming soon".
+export const ZONING_DETAILS_AVAILABLE = true
 
 // The API has no road data (accesstype is public access to the land, not roads).
 // While false, road access shows "Unknown, verify", is left out of the score,

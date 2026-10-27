@@ -1,3 +1,4 @@
+import { zoneType, ZONE_TYPE_LABELS } from '@/lib/zoning'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
@@ -115,6 +116,7 @@ export default async function CountyPage({ params }: { params: Promise<Params> }
                   <thead>
                     <tr className="text-left text-[11px] text-ink-3 uppercase tracking-wider">
                       <th className="font-medium pb-1.5">Code</th>
+                      <th className="font-medium pb-1.5">Looks like</th>
                       <th className="font-medium pb-1.5 text-right">Share of lots</th>
                     </tr>
                   </thead>
@@ -122,6 +124,7 @@ export default async function CountyPage({ params }: { params: Promise<Params> }
                     {profile.zoning.map(z => (
                       <tr key={z.code} className="border-t border-tan-lt">
                         <td className="py-1.5 font-semibold text-ink">{z.code}</td>
+                        <td className="py-1.5 text-ink-2">{ZONE_TYPE_LABELS[zoneType(z.code)]}</td>
                         <td className="py-1.5 text-right text-ink-2">{pct(z.share)}</td>
                       </tr>
                     ))}
@@ -140,8 +143,8 @@ export default async function CountyPage({ params }: { params: Promise<Params> }
               </p>
             )}
             <p className="text-xs text-ink-3 leading-relaxed">
-              A plain-language summary of what each zone allows for tiny homes is coming
-              soon. Until then, ask county planning what a code allows for your build type.
+              The zone type is our best guess from the code. Codes mean different things in
+              different counties, so ask county planning what a code allows for your build type.
             </p>
           </Section>
 

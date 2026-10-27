@@ -9,6 +9,7 @@ import {
 import { ScorePill } from '../ui/ScorePill'
 import { formatAcres } from '@/lib/scoring'
 import { planningSearchUrl } from '@/lib/counties'
+import { ZONE_TYPE_LABELS, UNLIKELY_ZONE_TYPES } from '@/lib/zoning'
 import dynamic from 'next/dynamic'
 
 // MapLibre needs the browser
@@ -171,17 +172,29 @@ export function ParcelDetail({ parcel, tribe, onBack }: ParcelDetailProps) {
         </Section>
 
         <Section title="Zoning and legality">
-          <div className="bg-amber-lt border border-amber/25 rounded p-2.5 mb-2">
-            <div className="text-[10px] font-semibold text-amber mb-1">
-              {parcel.zoningcode ?? 'Unknown, verify'}
+          <div className={`rounded p-2.5 mb-2 border ${UNLIKELY_ZONE_TYPES.includes(parcel.zoneType)
+                            ? 'bg-danger-lt border-danger/20' : 'bg-amber-lt border-amber/25'}`}>
+            <div className={`text-[10px] font-semibold mb-1 ${UNLIKELY_ZONE_TYPES.includes(parcel.zoneType)
+                              ? 'text-danger' : 'text-amber'}`}>
+              {parcel.zoningcode
+                ? `${parcel.zoningcode} · ${ZONE_TYPE_LABELS[parcel.zoneType]}`
+                : 'Unknown, verify'}
             </div>
             <div className="text-xs text-ink-2 leading-relaxed">{parcel.zoningPlainText}</div>
           </div>
-          <a href={planningSearchUrl(
-               [parcel.countyname, parcel.parcelstate].filter(Boolean).join(', '))} target="_blank" rel="noopener noreferrer"
-             className="text-xs text-accent font-medium hover:underline">
-            Verify with county planning →
-          </a>
+          <div className="flex flex-col gap-1">
+            {parcel.zoningurl && (
+              <a href={parcel.zoningurl} target="_blank" rel="noopener noreferrer"
+                 className="text-xs text-accent font-medium hover:underline">
+                What {parcel.zoningcode ?? 'this zone'} allows →
+              </a>
+            )}
+            <a href={planningSearchUrl(
+                 [parcel.countyname, parcel.parcelstate].filter(Boolean).join(', '))} target="_blank" rel="noopener noreferrer"
+               className="text-xs text-accent font-medium hover:underline">
+              Verify with county planning →
+            </a>
+          </div>
         </Section>
 
         <Section title={ROAD_ACCESS_AVAILABLE ? 'Access and infrastructure' : 'Site conditions'}>

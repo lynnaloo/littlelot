@@ -3,16 +3,17 @@
  *
  * Computes a 0–100 score for each parcel, weighted by build tribe.
  * The score is a composite of five dimensions:
- *   - Zoning legality  (30 pts for offgrid, 35 for foundation, etc.)
+ *   - Zoning legality  (25–35 pts), from the zone type only, never full points
  *   - Road access      (20–30 pts depending on tribe)
- * Zoning and road access are left out until the data exists (see the flags
- * in types/parcel.ts), and the rest are scaled to 100.
+ * Road access is left out until the data exists (see the flags in
+ * types/parcel.ts), and the rest are scaled to 100.
  *   - Water/well potential (10–25 pts)
  *   - Flood zone clear (15 pts all tribes)
  *   - No HOA/CC&Rs     (10–15 pts)
  */
 
 import type {
+  ZoneType,
   Parcel,
   ParcelAttributes,
   BuildTribe,
@@ -20,6 +21,7 @@ import type {
   FloodZone,
   RoadAccess,
 } from '@/types/parcel'
+import { zoneType, ZONE_TYPE_LABELS } from '@/lib/zoning'
 import {
   TRIBE_SCORE_WEIGHTS,
   ZONING_DETAILS_AVAILABLE,
@@ -42,38 +44,28 @@ export function formatAcres(acres: number): string {
 }
 
 // ── Zoning score ─────────────────────────────────────────────────────────────
-// We do a best-effort classification from the zoning code string.
-// Definitive zoning guidance lives in the county guides pages.
+// From the zone type only (lib/zoning.ts). Share of the zoning points by tribe.
+// Nothing gets full points: the code alone never confirms a tiny home is
+// allowed. Full points are for zones checked by hand for a county, later.
+
+const ZONE_TYPE_SCORES: Record<ZoneType, Record<BuildTribe, number>> = {
+  //               THOWs are often treated as RVs, so they score lower in most zones
+  agricultural: { thow: 0.70, foundation: 0.80, offgrid: 0.80, community: 0.70 },
+  rural:        { thow: 0.70, foundation: 0.80, offgrid: 0.75, community: 0.70 },
+  unzoned:      { thow: 0.80, foundation: 0.75, offgrid: 0.80, community: 0.70 },
+  manufactured: { thow: 0.75, foundation: 0.60, offgrid: 0.40, community: 0.75 },
+  // Minimum home sizes of 600 to 1,000 sq ft are common here
+  residential:  { thow: 0.30, foundation: 0.55, offgrid: 0.30, community: 0.35 },
+  planned:      { thow: 0.20, foundation: 0.20, offgrid: 0.20, community: 0.20 },
+  commercial:   { thow: 0.10, foundation: 0.10, offgrid: 0.10, community: 0.10 },
+  industrial:   { thow: 0,    foundation: 0,    offgrid: 0,    community: 0    },
+  public:       { thow: 0,    foundation: 0,    offgrid: 0,    community: 0    },
+  unknown:      { thow: 0.40, foundation: 0.40, offgrid: 0.40, community: 0.40 },
+}
 
 function zoningScore(attrs: ParcelAttributes, tribe: BuildTribe): number {
-  const code = (attrs.zoningcode ?? '').toLowerCase()
-  const desc = (attrs.zoningdesc ?? '').toLowerCase()
-  const combined = `${code} ${desc}`
   const max = TRIBE_SCORE_WEIGHTS[tribe].zoning
-
-  // Strong positive signals
-  if (combined.includes('agricultural') || /^a-?\d/.test(code) || /^ag/.test(code)) {
-    // Agricultural zones are generally permissive for tiny homes
-    return tribe === 'thow' ? Math.round(max * 0.75) : Math.round(max * 0.90)
-  }
-
-  if (combined.includes('rural residential') || /^rr/.test(code)) {
-    return Math.round(max * 0.70)
-  }
-
-  if (combined.includes('residential') || /^r-?\d/.test(code)) {
-    // Standard residential — foundation builds may be ok, THOWs usually not
-    return tribe === 'foundation' ? Math.round(max * 0.70)
-         : tribe === 'thow'       ? Math.round(max * 0.35)
-         : Math.round(max * 0.50)
-  }
-
-  if (combined.includes('recreational') || combined.includes('rv') || combined.includes('resort')) {
-    return tribe === 'thow' ? Math.round(max * 0.90) : Math.round(max * 0.40)
-  }
-
-  // Unknown — can't assess
-  return Math.round(max * 0.40)
+  return Math.round(max * ZONE_TYPE_SCORES[zoneType(attrs.zoningcode)][tribe])
 }
 
 // ── Access score ──────────────────────────────────────────────────────────────
@@ -180,29 +172,35 @@ export function zoningPlainText(attrs: ParcelAttributes, tribe: BuildTribe): str
     return `Zoned ${zone}. A plain-language summary of what this zone allows for tiny homes is coming soon. Until then, check with county planning before you buy.`
   }
 
-  const code = attrs.zoningcode ?? 'Unknown'
-  const desc = attrs.zoningdesc ?? ''
-  const combined = `${code} ${desc}`.toLowerCase()
-
-  if (combined.includes('agricultural') || /^a-?\d|^ag/.test(code.toLowerCase())) {
-    if (tribe === 'thow') {
-      return `${code}: Agricultural. THOWs are typically classified as RVs here and require a special exception or CUP. Verify with county planning before purchasing.`
-    }
-    return `${code}: Agricultural. Single-family dwellings are generally allowed; structures under 700 sq ft may require a conditional use permit. Verify with county planning.`
+  const code = attrs.zoningcode
+  if (!code) {
+    return 'No zoning code on record for this lot. Ask county planning what zone it is in and whether a tiny home is allowed.'
   }
+  const type = zoneType(code)
+  const zoned = type === 'unknown' ? `Zoned ${code}.` : `Zoned ${code}, which looks like ${ZONE_TYPE_LABELS[type].toLowerCase()} zoning.`
+  const thow = tribe === 'thow'
 
-  if (/^r-?\d/.test(code.toLowerCase())) {
-    if (tribe === 'thow') {
-      return `${code}: Residential. Most R-zones prohibit THOWs as permanent dwellings. This lot may work for a foundation build. Verify minimum square footage requirements.`
-    }
-    return `${code}: Residential zoning. Check the minimum square footage requirement. Many R-zones set a floor of 600–1,000 sq ft that can affect tiny home approval.`
+  const detail: Record<ZoneType, string> = {
+    agricultural: thow
+      ? 'Farm zones are often the most open to small homes, but many counties treat a THOW as an RV and limit how long you can live in one. Ask about full-time RV or THOW occupancy.'
+      : 'Farm zones are often the most open to small homes. Ask about the minimum home size and whether a house is allowed without a farm use.',
+    rural: thow
+      ? 'Rural zones are often open to small homes, but many counties treat a THOW as an RV. Ask about full-time RV or THOW occupancy.'
+      : 'Rural zones are often open to small homes. Ask about the minimum home size and the minimum lot size for a well and septic.',
+    unzoned: 'Unzoned land has no zoning rules, but the county may still require building permits, septic approval, and an address. Ask what permits a home needs here.',
+    manufactured: thow
+      ? 'Manufactured home zones are often friendly to homes on wheels, but some only allow HUD-code homes. Ask whether a THOW or park model counts.'
+      : 'Manufactured home zones may only allow HUD-code homes. Ask whether a site-built tiny home is allowed.',
+    residential: thow
+      ? 'Most residential zones don\'t allow living full time in a THOW. A foundation build may work. Ask about the minimum home size and ADU rules.'
+      : 'Many residential zones set a minimum home size of 600 to 1,000 sq ft. Ask about the minimum and whether a backyard cottage (ADU) is allowed.',
+    planned:      'Planned developments set their own rules, usually with HOA-style covenants. Ask for the development\'s rules before you buy.',
+    commercial:   'Homes usually aren\'t allowed in commercial zones, or only above a business. Unlikely to work for a tiny home.',
+    industrial:   'Homes are almost never allowed in industrial zones. Unlikely to work for a tiny home.',
+    public:       'This looks like public land, open space, or a right of way. Homes usually aren\'t allowed.',
+    unknown:      'We can\'t tell the zone type from this code. Ask county planning what it allows.',
   }
-
-  if (combined.includes('rural residential') || /^rr/.test(code.toLowerCase())) {
-    return `${code}: Rural Residential. Generally permissive for small dwellings. Verify tiny home or THOW rules with county planning.`
-  }
-
-  return `${code}${desc ? ': ' + desc : ''}. Zoning compatibility for tiny homes is unclear from code alone. Verify directly with county planning before purchasing.`
+  return `${zoned} ${detail[type]} Codes vary by county, so verify with county planning before you buy.`
 }
 
 // ── Flood risk label ──────────────────────────────────────────────────────────
@@ -263,6 +261,7 @@ export function enrichParcel(
     readinessScore: scoreBreakdown.total,
     scoreBreakdown,
     zoningPlainText: zoningPlainText(attrs, tribe),
+    zoneType:       zoneType(attrs.zoningcode),
     hoaStatus:      hoaStatusLabel(attrs),
     geometry,
   }

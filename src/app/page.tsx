@@ -35,7 +35,7 @@ export default function HomePage() {
               Zoning is hyper-local, HOAs ban tiny homes in the fine print, and most
               land listing sites don&apos;t even try to answer those questions. We do,
               with detailed lot information and a readiness score built for your
-              build type. Plain-language zoning summaries are coming soon.
+              build type.
             </p>
             <div className="flex flex-wrap items-center gap-4 mb-6">
               <Link
@@ -50,7 +50,7 @@ export default function HomePage() {
               </Link>
             </div>
             <div className="flex flex-wrap gap-2 pt-5 border-t border-border">
-              {['No HOA filter', 'Flood zone data', 'Plain-language zoning (coming soon)'].map(b => (
+              {['No HOA filter', 'Flood zone data', 'Zone type on every lot'].map(b => (
                 <span key={b}
                   className="text-xs font-medium text-ink-2 bg-surface border border-border
                              px-2 py-1 rounded">
@@ -81,7 +81,7 @@ export default function HomePage() {
               <div className="text-xs text-ink-3 mb-3">Luray, Page County, VA · 5.1 mi from town</div>
               <div className="grid grid-cols-2 gap-2">
                 {[
-                  ['Zoning',      'AG-1, details soon', 'warn'],
+                  ['Zoning',      'Agricultural, verify', 'warn'],
                   ['Flood zone',  'Zone X, clear',     'ok'],
                   ['HOA',         'None on record',      'ok'],
                   ['Structures',  'None, vacant',        'ok'],
@@ -150,7 +150,7 @@ export default function HomePage() {
             </p>
             <div className="flex flex-col gap-3">
               {[
-                { label: 'Zoning legality',    pts: 30, pct: 60, soon: true },
+                { label: 'Zoning (zone type)', pts: 30, pct: 60 },
                 { label: 'Water / well',        pts: 20, pct: 40 },
                 { label: 'Flood zone clear',    pts: 15, pct: 30 },
                 { label: 'No HOA / CC&Rs',      pts: 15, pct: 30 },
@@ -171,9 +171,9 @@ export default function HomePage() {
             </div>
             <p className="text-xs text-ink-3 mt-6 leading-relaxed max-w-sm">
               <strong className="text-ink">A note on certainty:</strong>{' '}
-              We show each lot&apos;s zoning code, but plain-language zoning is coming
-              soon. Until then, the score is based on the other three factors, so check
-              what the code allows with county planning yourself. We flag
+              Zoning points come from the zone type (farm, rural, residential, commercial),
+              and no lot gets full zoning points, because the same code means different
+              things in different counties. Check what the code allows with county planning. We flag
               uncertain fields and always link to the county planning office. Never rely solely on this score to make a purchase decision.
             </p>
           </div>
