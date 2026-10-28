@@ -11,6 +11,7 @@ interface SearchTopbarProps {
   onSwitchTribe: () => void
   onSearch: (query: string) => void
   initialQuery?: string
+  autoFocus?: boolean
 }
 
 export function SearchTopbar({
@@ -18,11 +19,14 @@ export function SearchTopbar({
   onSwitchTribe,
   onSearch,
   initialQuery = '',
+  autoFocus = false,
 }: SearchTopbarProps) {
   const [query, setQuery] = useState(initialQuery)
 
   return (
-    <header className="h-12 bg-ink flex items-center px-3 gap-3 flex-shrink-0 border-b border-white/10">
+    // On phones the search gets its own full-width row
+    <header className="sm:h-14 bg-ink flex flex-wrap sm:flex-nowrap items-center px-3 py-2 sm:py-0 gap-x-3 gap-y-2
+                       flex-shrink-0 border-b border-white/10">
       <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
         <LogoMark size={22} variant="reversed" />
         <span className="font-serif text-tan-lt text-base hidden sm:block">the little lot</span>
@@ -42,17 +46,26 @@ export function SearchTopbar({
       {/* search */}
       <form
         onSubmit={e => { e.preventDefault(); onSearch(query) }}
-        className="flex-1 max-w-sm"
+        className="w-full sm:w-auto sm:flex-1 max-w-xl flex min-w-0"
       >
         <input
-          type="text"
+          type="search"
           value={query}
           onChange={e => setQuery(e.target.value)}
-          placeholder="County, city, or zip..."
-          className="w-full h-8 bg-white/10 border border-white/15 rounded
-                     px-3 text-xs text-tan-lt placeholder:text-tan/60
-                     focus:outline-none focus:border-accent"
+          autoFocus={autoFocus}
+          aria-label="Search for lots by county, city, or zip"
+          placeholder="Search a county, city, or zip"
+          className="flex-1 min-w-0 h-10 bg-white border border-white rounded-l
+                     px-3.5 text-sm text-ink placeholder:text-ink-3
+                     focus:outline-none focus:ring-2 focus:ring-accent"
         />
+        <button
+          type="submit"
+          className="h-10 px-3 sm:px-4 rounded-r bg-accent text-white text-sm font-medium
+                     hover:bg-accent/90 transition-colors flex-shrink-0"
+        >
+          Search
+        </button>
       </form>
 
       {/* "Save search" returns once accounts exist (needs login) */}

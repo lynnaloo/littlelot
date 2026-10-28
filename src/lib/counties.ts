@@ -77,3 +77,29 @@ export function planningSearchUrl(place: string): string {
   const query = `${place} planning and zoning office`
   return `https://www.google.com/search?q=${encodeURIComponent(query)}`
 }
+
+export function findCountyByGeoid(geoid: string): County | undefined {
+  return COUNTIES.find(c => c.geoid === geoid)
+}
+
+// LandWatch's county page, e.g. /virginia-land-for-sale/page-county. Independent
+// cities and Alaska boroughs have town pages there, so drop the suffix for those.
+// No listing feed yet, so this is the closest we can get to "for sale near here".
+export function landForSaleUrl(c: County): string {
+  const state = STATE_NAMES[c.state].toLowerCase().replace(/ /g, '-')
+  return `https://www.landwatch.com/${state}-land-for-sale/${listingPlaceSlug(c)}`
+}
+
+// Zillow's land listings for the county, e.g. /floyd-county-va/land/. For lots
+// with no street address, which Zillow can't look up directly.
+export function zillowLandUrl(c: County): string {
+  return `https://www.zillow.com/${listingPlaceSlug(c)}-${c.state.toLowerCase()}/land/`
+}
+
+// Listing sites have county pages for counties and parishes, and town pages
+// for independent cities and Alaska boroughs, so drop the suffix for those
+function listingPlaceSlug(c: County): string {
+  return /-(county|parish)$/.test(c.slug)
+    ? c.slug
+    : c.slug.replace(/-(city-and-borough|census-area|municipality|borough|city)$/, '')
+}

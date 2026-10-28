@@ -1,14 +1,17 @@
 'use client'
 
-import type { Parcel, BuildTribe } from '@/types/parcel'
+import type { Parcel, BuildTribe, Nearby } from '@/types/parcel'
 import {
   TRIBE_SCORE_WEIGHTS,
   ZONING_DETAILS_AVAILABLE,
   ROAD_ACCESS_AVAILABLE,
+  HOA_DATA_AVAILABLE,
+  NEARBY_MAX_MILES,
 } from '@/types/parcel'
 import { ScorePill } from '../ui/ScorePill'
-import { formatAcres } from '@/lib/scoring'
-import { planningSearchUrl } from '@/lib/counties'
+import { formatAcres, WILDFIRE_LABELS } from '@/lib/scoring'
+import { planningSearchUrl, findCountyByGeoid, landForSaleUrl, zillowLandUrl } from '@/lib/counties'
+import { useBuildableGround, useNearby } from '@/lib/useLotSurroundings'
 import { ZONE_TYPE_LABELS, UNLIKELY_ZONE_TYPES } from '@/lib/zoning'
 import dynamic from 'next/dynamic'
 
@@ -57,12 +60,51 @@ function mapsUrl(parcel: Parcel): string {
   return `https://www.google.com/maps/search/?api=1&query=${parcel.surfpointy},${parcel.surfpointx}`
 }
 
+// Only for lots with a street address; Zillow can't match a parcel ID.
+// Goes through our route, which adds the ZIP Zillow needs to find it.
+function zillowUrl(address: string, parcel: Parcel): string {
+  const params = new URLSearchParams({
+    addr:  address,
+    state: parcel.parcelstate ?? '',
+    lat:   String(parcel.surfpointy),
+    lng:   String(parcel.surfpointx),
+  })
+  if (parcel.countyname) params.set('county', parcel.countyname)
+  return `/api/zillow?${params}`
+}
+
 // accesstype is set mostly on public land, which is rarely for sale
 const PUBLIC_ACCESS_LABELS: Record<NonNullable<Parcel['accesstype']>, string> = {
   OPEN:       'Open to the public',
   RESTRICTED: 'Restricted public access',
   CLOSED:     'Closed to the public',
   UNKNOWN:    'Unknown, verify',
+}
+
+const MAX_FLAT_GRADE = 15   // percent, matches lib/terrain.ts
+
+function groundRow(ground: ReturnType<typeof useBuildableGround>): {
+  value: string
+  status?: 'ok' | 'warn' | 'bad'
+} {
+  if (ground === undefined) return { value: 'Checking…' }
+  if (ground === null || ground === 'error') return { value: 'Unknown, verify', status: 'warn' }
+  const acres = ground.flatAcres
+  return {
+    value: acres < 0.01
+      ? 'Little or none under 15% grade'
+      : `About ${formatAcres(acres)} ac (${Math.round(ground.flatShare * 100)}%) under 15% grade`,
+    // A tiny home pad and parking fit in about a tenth of an acre
+    status: acres >= 0.25 ? 'ok' : acres >= 0.1 ? 'warn' : 'bad',
+  }
+}
+
+function nearbyValue(nearby: Partial<Nearby> | undefined, key: keyof Nearby): string {
+  if (nearby === undefined) return 'Checking…'
+  const place = nearby[key]
+  if (place === undefined) return 'Unknown, verify'
+  if (place === null) return `None within ${NEARBY_MAX_MILES} mi`
+  return `${place.name}, ${place.miles.toFixed(1)} mi`
 }
 
 // Plain links for now. Swap in referral links once affiliate programs are set
@@ -86,6 +128,9 @@ const RESOURCES = [
 ]
 
 export function ParcelDetail({ parcel, tribe, onBack }: ParcelDetailProps) {
+  const ground = useBuildableGround(parcel)
+  const nearby = useNearby(parcel)
+
   if (!parcel) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center text-center p-6 text-ink-3">
@@ -96,6 +141,7 @@ export function ParcelDetail({ parcel, tribe, onBack }: ParcelDetailProps) {
     )
   }
 
+  const county  = findCountyByGeoid(parcel.geoid)
   const acreage = formatAcres(parcel.acreage)
   // Vacant land often has a placeholder like "NO ADDRESSED STRUCTURES"; keep only street addresses
   const address  = /^\d/.test(parcel.parceladdr ?? '') ? parcel.parceladdr : null
@@ -147,10 +193,6 @@ export function ParcelDetail({ parcel, tribe, onBack }: ParcelDetailProps) {
           <DetailRow label="Acreage"       value={`${acreage} ac`} />
           <DetailRow label="Location"      value={location} />
           <DetailRow label="Parcel ID"     value={parcel.parcelid ?? 'Not on record'} />
-          {parcel.nearestTown && parcel.distanceToTown && (
-            <DetailRow label="Distance to town"
-                       value={`${parcel.distanceToTown.toFixed(1)} mi to ${parcel.nearestTown}`} />
-          )}
           {parcel.elevavg != null && (
             <DetailRow label="Elevation (avg)"
                        value={`${Math.round(parcel.elevavg * FEET_PER_METRE).toLocaleString()} ft`} />
@@ -165,6 +207,24 @@ export function ParcelDetail({ parcel, tribe, onBack }: ParcelDetailProps) {
              className="inline-block mt-2 text-xs text-accent font-medium hover:underline">
             Open in Google Maps →
           </a>
+          {address && (
+            <a href={zillowUrl(address, parcel)} target="_blank" rel="noopener noreferrer"
+               className="block mt-1 text-xs text-accent font-medium hover:underline">
+              Look up this address on Zillow →
+            </a>
+          )}
+          {!address && county && (
+            <a href={zillowLandUrl(county)} target="_blank" rel="noopener noreferrer"
+               className="block mt-1 text-xs text-accent font-medium hover:underline">
+              Land for sale in {county.name} on Zillow →
+            </a>
+          )}
+          {county && (
+            <a href={landForSaleUrl(county)} target="_blank" rel="noopener noreferrer"
+               className="block mt-1 text-xs text-accent font-medium hover:underline">
+              Land for sale in {county.name} on LandWatch →
+            </a>
+          )}
           <p className="text-[10px] text-ink-3 mt-1 leading-relaxed">
             Most vacant land has no street address. Use the parcel ID with the county
             assessor or planning office to ask about this lot.
@@ -198,34 +258,67 @@ export function ParcelDetail({ parcel, tribe, onBack }: ParcelDetailProps) {
         </Section>
 
         <Section title={ROAD_ACCESS_AVAILABLE ? 'Access and infrastructure' : 'Site conditions'}>
-          {ROAD_ACCESS_AVAILABLE && (
-            <DetailRow label="Road access" value={parcel.accessLabel} status="warn" />
-          )}
+          <DetailRow label="Road access"
+                     value={ROAD_ACCESS_AVAILABLE ? parcel.accessLabel : 'Coming soon'}
+                     status="warn" />
           {parcel.accesstype && (
             <DetailRow label="Public access" value={PUBLIC_ACCESS_LABELS[parcel.accesstype]}
                        status="warn" />
           )}
           <DetailRow label="Flood zone"
-                     value={parcel.fldzone === 'X' ? 'Zone X, minimal risk'
-                          : parcel.fldzone === 'unknown' ? 'Unknown, verify'
-                          : `Zone ${parcel.fldzone}`}
+                     value={parcel.floodLabel}
                      status={parcel.floodRisk === 'none' ? 'ok'
                            : parcel.floodRisk === 'moderate' ? 'warn' : 'bad'} />
+          <DetailRow label="Wildfire hazard"
+                     value={WILDFIRE_LABELS[parcel.wildfireHazard].label}
+                     status={WILDFIRE_LABELS[parcel.wildfireHazard].status} />
           <DetailRow label="HOA / CC&Rs"
                      value={parcel.hoaStatus === 'none' ? 'None on record'
                           : parcel.hoaStatus === 'present' ? 'CC&Rs present'
-                          : 'Unknown, verify'}
+                          : HOA_DATA_AVAILABLE ? 'Unknown, verify' : 'Unknown, ask for the deed'}
                      status={parcel.hoaStatus === 'none' ? 'ok'
                            : parcel.hoaStatus === 'present' ? 'bad' : 'warn'} />
           <DetailRow label="Structures"
                      value={parcel.isVacant ? 'None' : `${parcel.numbldgs} building(s)`}
                      status={parcel.isVacant ? 'ok' : 'warn'} />
+          <DetailRow label="Buildable ground" {...groundRow(ground)} />
+          {ground && ground !== 'error' && (
+            <DetailRow label="Typical slope" value={`${ground.typicalGrade}% grade`}
+                       status={ground.typicalGrade <= MAX_FLAT_GRADE ? 'ok'
+                             : ground.typicalGrade <= 30 ? 'warn' : 'bad'} />
+          )}
+          <p className="text-[10px] text-ink-3 mt-1 leading-relaxed">
+            Wildfire hazard is the highest level anywhere on the lot, from the Forest Service&apos;s
+            2023 hazard map. It rates how hard a fire would be to control, not how likely one is.
+          </p>
+          <p className="text-[10px] text-ink-3 mt-1 leading-relaxed">
+            Buildable ground is land under a {MAX_FLAT_GRADE}% grade, a common limit for driveways
+            and septic fields. It comes from USGS elevation data on a 10 m grid, so treat it as a
+            guide, not a site survey.
+          </p>
+        </Section>
+
+        <Section title="Nearby">
+          <DetailRow label="Nearest town"  value={nearbyValue(nearby, 'town')} />
+          <DetailRow label="Elementary school" value={nearbyValue(nearby, 'school')} />
+          <DetailRow label="Hospital"      value={nearbyValue(nearby, 'hospital')} />
+          <p className="text-[10px] text-ink-3 mt-1 leading-relaxed">
+            Straight-line distances, so the drive will be longer. The nearest public elementary
+            school may not be the one this lot is zoned for; ask the school district. Hospitals are
+            general and critical access hospitals (FEMA), which almost always have an emergency room.
+          </p>
         </Section>
 
         <Section title="Score breakdown">
           {!ZONING_DETAILS_AVAILABLE && (
             <div className="flex justify-between text-[10px] text-ink-3 mb-1.5">
               <span>Zoning</span>
+              <span className="font-semibold text-amber">Coming soon</span>
+            </div>
+          )}
+          {!ROAD_ACCESS_AVAILABLE && (
+            <div className="flex justify-between text-[10px] text-ink-3 mb-1.5">
+              <span>Road access</span>
               <span className="font-semibold text-amber">Coming soon</span>
             </div>
           )}
@@ -238,7 +331,10 @@ export function ParcelDetail({ parcel, tribe, onBack }: ParcelDetailProps) {
               : []),
             ['Water',       parcel.scoreBreakdown.water,   TRIBE_SCORE_WEIGHTS[tribe].water],
             ['Flood zone',  parcel.scoreBreakdown.flood,   TRIBE_SCORE_WEIGHTS[tribe].flood],
-            ['HOA',         parcel.scoreBreakdown.hoa,     TRIBE_SCORE_WEIGHTS[tribe].hoa],
+            ['Wildfire',    parcel.scoreBreakdown.fire,    TRIBE_SCORE_WEIGHTS[tribe].fire],
+            ...(HOA_DATA_AVAILABLE
+              ? [['HOA', parcel.scoreBreakdown.hoa, TRIBE_SCORE_WEIGHTS[tribe].hoa]]
+              : []),
           ].map(([label, pts, max]) => (
             <div key={label as string} className="mb-1.5">
               <div className="flex justify-between text-[10px] text-ink-3 mb-0.5">

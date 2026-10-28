@@ -101,7 +101,7 @@ Indexed fields: `geoid`, `lrid`, `ownername`, `accesstype`, `ownertype`, `placet
 
 ## Scoring system
 
-The Readiness Score is computed in `src/lib/scoring.ts`. It has five dimensions:
+The Readiness Score is computed in `src/lib/scoring.ts`. It has six dimensions:
 
 | Dimension | Function | Notes |
 |---|---|---|
@@ -109,7 +109,8 @@ The Readiness Score is computed in `src/lib/scoring.ts`. It has five dimensions:
 | Access | `accessScore()` | Off until road data exists (`ROAD_ACCESS_AVAILABLE`). Not `accesstype`. |
 | Water | `waterScore()` | Proxied from acreage. No direct well data. |
 | Flood | `floodScore()` | From `fldzone` field — reliable. |
-| HOA | `hoaScore()` | Inferred from owner type + acreage. Uncertain. |
+| Fire | `fireScore()` | Forest Service 2023 Wildfire Hazard Potential, highest class sampled on the lot (`src/lib/wildfire.ts`). Looked up once per search batch. |
+| HOA | `hoaScore()` | Off (`HOA_DATA_AVAILABLE`): no source for HOA or CC&R data. Details say "Unknown, ask for the deed". |
 
 When iterating on scoring weights, edit `TRIBE_SCORE_WEIGHTS` in `src/types/parcel.ts`.
 When improving classification logic, edit the individual `*Score()` functions.
@@ -127,7 +128,7 @@ Key fields and their reliability:
 |---|---|---|
 | `calcarea` | High | Square metres, not acres. Use `parcelAcres()` in `scoring.ts`. Prefer over `taxacres`. |
 | `accesstype` | Medium | Indexed. Public access to the land (parks etc.): `OPEN`, `RESTRICTED`, `CLOSED`, `UNKNOWN`, or null. Not road access; the API has no road data. |
-| `fldzone` | High | FEMA flood zone. Always present. |
+| `fldzone` | High | FEMA flood zone. Always present. Zone X alone isn't "safe": read `zonesubty` (minimal, 0.2% annual chance, or behind a levee). |
 | `zoningcode` | Medium | Present in most counties. Codes vary. |
 | `zoningdesc` | Low | County's name for the zone. Partial coverage, often missing. |
 | `numbldgs` | Medium | Use to determine vacancy. |
@@ -151,7 +152,13 @@ These are the known gaps. Pick up any of these without asking:
    raster tiles (zoom 13+); results are drawn from our own search response,
    colored by score. The vector tile proxy at `/api/tiles/{z}/{x}/{y}.pbf`
    works but the map doesn't use it yet.
-   Card thumbnails are still SVG placeholders.
+   A Map/Satellite toggle uses USGS imagery (no key); the lot detail map
+   opens on satellite. Card thumbnails are still SVG placeholders.
+   Lot details also load buildable ground (`/api/slope`, USGS slope) and the
+   nearest town, elementary school and hospital (`/api/nearby`, Census, NCES,
+   FEMA). Both are free federal services, loaded only for the open lot.
+   The Zillow address link goes through `/api/zillow`, which adds the ZIP
+   (Census ZIP code area); `placename` is a property name, not a town.
 
 3. **County guide pages:** Done as data-driven pages for all 3,222 counties
    (`src/lib/counties.ts`, `src/lib/countyProfile.ts`), built on first visit
@@ -176,6 +183,7 @@ These are the known gaps. Pick up any of these without asking:
    Datafiniti) matched to lots by location, since vacant lots often have no
    street address. Coverage will be partial, so label it "Listed for sale",
    never "Available". Trial in one or two counties first.
+   Full plan: `docs/listed-for-sale-plan.md`.
 
 ---
 

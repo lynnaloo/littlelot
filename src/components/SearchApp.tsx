@@ -18,11 +18,10 @@ type ResultsView = 'list' | 'map'
 // MapLibre needs the browser
 const MapView = dynamic(() => import('./map/MapView').then(m => m.MapView), { ssr: false })
 
-// Most buyers want vacant, dry land without an HOA, so start with these on
+// Most buyers want vacant, dry land, so start with these on
 const DEFAULT_FILTERS: Omit<SearchFilters, 'tribe'> = {
   noStructures: true,
   noFloodRisk:  true,
-  noHoa:        true,
 }
 
 export function SearchApp({ initialPlace = null }: { initialPlace?: Place | null }) {
@@ -69,6 +68,7 @@ export function SearchApp({ initialPlace = null }: { initialPlace?: Place | null
         tribe={tribe}
         tribeLabel={TRIBE_LABELS[tribe]}
         initialQuery={initialPlace?.label}
+        autoFocus={needsLocation}
         onSwitchTribe={handleSwitchTribe}
         onSearch={(query) => { setSelected(null); search(query) }}
       />
@@ -96,15 +96,16 @@ export function SearchApp({ initialPlace = null }: { initialPlace?: Place | null
           ${mobileTab === 'results' ? 'flex' : 'hidden'}
         `}>
           {/* Results bar */}
-          {/* Wraps on phones: status on top, view toggle and sort below */}
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-3.5 py-1.5 min-h-10
-                          bg-white border-b border-border flex-shrink-0">
+          {/* Wraps on phones: status on top, view toggle and sort below.
+              Hidden until there's a place, so it isn't mistaken for the search box. */}
+          <div className={`${needsLocation && !isLocating ? 'hidden' : 'flex'} flex-wrap items-center gap-x-3 gap-y-1.5 px-3.5 py-1.5 min-h-10
+                          bg-white border-b border-border flex-shrink-0`}>
             <span className="text-sm text-ink-2 w-full sm:w-auto sm:flex-1 min-w-0 truncate">
               {isLocating ? 'Finding that place...'
                 : needsLocation ? 'Search for a county to see lots'
                 : isLoading ? 'Searching...'
                 : (
-                  // Count what's loaded. The API's total is before our HOA and
+                  // Count what's loaded. The API's total is before our
                   // score checks, so it would overstate what buyers can see.
                   <>
                     Showing <strong className="text-ink font-semibold">{parcels.length}</strong>

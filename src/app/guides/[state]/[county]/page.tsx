@@ -154,7 +154,7 @@ export default async function CountyPage({ params }: { params: Promise<Params> }
               <Fact label="Typical lot size" value={`${formatAcres(profile.medianAcres)} acres`} />
             )}
             <Fact label="Lots 1 acre or larger" value={pct(profile.oneAcrePlus)} />
-            <Fact label="Lots outside the flood zone" value={pct(profile.outsideFloodZone)} />
+            <Fact label="Lots outside the 100-year floodplain" value={pct(profile.outsideFloodZone)} />
             <p className="text-xs text-ink-3 mt-3">
               Based on a sample of {profile.sampleSize} lots from county records. Typical
               lot size is the median.

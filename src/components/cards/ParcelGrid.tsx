@@ -57,7 +57,7 @@ export function ParcelGrid({
       <div className="flex-1 flex flex-col items-center justify-center py-20 text-center text-ink-3">
         <span className="text-4xl mb-3">📍</span>
         <p className="text-sm font-medium text-ink mb-1">Where are you looking?</p>
-        <p className="text-xs">Search for a county to see lots.</p>
+        <p className="text-xs">Type a county, city, or zip in the search bar at the top.</p>
       </div>
     )
   }

@@ -1,10 +1,10 @@
 'use client'
 
 import type { Parcel } from '@/types/parcel'
-import { ROAD_ACCESS_AVAILABLE } from '@/types/parcel'
+import { ROAD_ACCESS_AVAILABLE, HOA_DATA_AVAILABLE } from '@/types/parcel'
 import { ScorePill } from '../ui/ScorePill'
 import { LotShape } from './LotShape'
-import { formatAcres } from '@/lib/scoring'
+import { formatAcres, WILDFIRE_LABELS } from '@/lib/scoring'
 import { ZONE_TYPE_LABELS, UNLIKELY_ZONE_TYPES } from '@/lib/zoning'
 
 interface ParcelCardProps {
@@ -43,10 +43,6 @@ export function ParcelCard({ parcel, isSelected, onSelect }: ParcelCardProps) {
                     : parcel.floodRisk === 'moderate' ? 'warn'
                     : 'bad'
 
-  const floodLabel = parcel.floodRisk === 'none' ? `Zone ${parcel.fldzone}, clear`
-                   : parcel.fldzone === 'unknown' ? 'Zone unknown, verify'
-                   : `Zone ${parcel.fldzone}, risk`
-
   const hoaStatus = parcel.hoaStatus === 'none' ? 'ok'
                   : parcel.hoaStatus === 'present' ? 'bad'
                   : 'warn'
@@ -84,8 +80,13 @@ export function ParcelCard({ parcel, isSelected, onSelect }: ParcelCardProps) {
           <AttrRow label="Zoning"
                    value={parcel.zoningcode ? `${ZONE_TYPE_LABELS[parcel.zoneType]}, verify` : 'Unknown, verify'}
                    status={UNLIKELY_ZONE_TYPES.includes(parcel.zoneType) ? 'bad' : 'warn'} />
-          <AttrRow label="Flood zone" value={floodLabel} status={floodStatus} />
-          <AttrRow label="HOA / CC&Rs" value={hoaLabel} status={hoaStatus} />
+          <AttrRow label="Flood zone" value={parcel.floodLabel} status={floodStatus} />
+          <AttrRow label="Wildfire hazard"
+                   value={WILDFIRE_LABELS[parcel.wildfireHazard].label}
+                   status={WILDFIRE_LABELS[parcel.wildfireHazard].status} />
+          {HOA_DATA_AVAILABLE && (
+            <AttrRow label="HOA / CC&Rs" value={hoaLabel} status={hoaStatus} />
+          )}
           <AttrRow label="Structures"
                    value={parcel.isVacant ? 'None' : `${parcel.numbldgs} on parcel`}
                    status={parcel.isVacant ? 'ok' : 'warn'} />

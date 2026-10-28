@@ -5,6 +5,7 @@ import {
   TRIBE_SCORE_WEIGHTS,
   ZONING_DETAILS_AVAILABLE,
   ROAD_ACCESS_AVAILABLE,
+  HOA_DATA_AVAILABLE,
 } from '@/types/parcel'
 
 interface FilterSidebarProps {
@@ -65,7 +66,8 @@ export function FilterSidebar({ tribe, filters, onChange }: FilterSidebarProps) 
             ...(ROAD_ACCESS_AVAILABLE    ? [['Road access',     weights.access]] : []),
             ['Water / well',    weights.water],
             ['Flood zone',      weights.flood],
-            ['No HOA',          weights.hoa],
+            ['Wildfire hazard', weights.fire],
+            ...(HOA_DATA_AVAILABLE       ? [['No HOA',          weights.hoa]] : []),
           ].map(([label, pts]) => (
             <div key={label as string} className="mb-1.5">
               <div className="flex justify-between text-[10px] text-ink-3 mb-0.5">
@@ -120,8 +122,8 @@ export function FilterSidebar({ tribe, filters, onChange }: FilterSidebarProps) 
       <Group title="Must-haves">
         {[
           { key: 'noStructures', label: 'No existing structures' },
-          { key: 'noFloodRisk',  label: 'Outside flood zone' },
-          { key: 'noHoa',        label: 'No HOA / CC&Rs' },
+          { key: 'noFloodRisk',  label: 'Outside the 100-year floodplain' },
+          ...(HOA_DATA_AVAILABLE ? [{ key: 'noHoa', label: 'No HOA / CC&Rs' }] : []),
         ].map(({ key, label }) => (
           <label key={key} className="flex items-center gap-2 mb-2 cursor-pointer">
             <input type="checkbox"
@@ -131,6 +133,12 @@ export function FilterSidebar({ tribe, filters, onChange }: FilterSidebarProps) 
             <span className="text-xs text-ink-2">{label}</span>
           </label>
         ))}
+        {filters.noFloodRisk && (
+          <p className="text-[10px] text-ink-3 leading-snug">
+            Hides FEMA zones A and V. Lots in the 500-year floodplain or behind a levee still
+            show, marked on each card. Flood insurance may still be wise.
+          </p>
+        )}
       </Group>
 
       <Divider />

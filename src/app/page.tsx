@@ -33,9 +33,9 @@ export default function HomePage() {
             <p className="text-ink-2 text-base leading-relaxed mb-8 max-w-md">
               It&apos;s finding land where your home is welcome, legal, and buildable.
               Zoning is hyper-local, HOAs ban tiny homes in the fine print, and most
-              land listing sites don&apos;t even try to answer those questions. We do,
-              with detailed lot information and a readiness score built for your
-              build type.
+              land listing sites don&apos;t even try to answer those questions. We start
+              with zoning, flood risk, and lot size, score every lot for your build
+              type, and tell you what to ask about the rest.
             </p>
             <div className="flex flex-wrap items-center gap-4 mb-6">
               <Link
@@ -50,7 +50,7 @@ export default function HomePage() {
               </Link>
             </div>
             <div className="flex flex-wrap gap-2 pt-5 border-t border-border">
-              {['No HOA filter', 'Flood zone data', 'Zone type on every lot'].map(b => (
+              {['Vacant land filter', 'Flood zone data', 'Zone type on every lot'].map(b => (
                 <span key={b}
                   className="text-xs font-medium text-ink-2 bg-surface border border-border
                              px-2 py-1 rounded">
@@ -83,7 +83,7 @@ export default function HomePage() {
                 {[
                   ['Zoning',      'Agricultural, verify', 'warn'],
                   ['Flood zone',  'Zone X, clear',     'ok'],
-                  ['HOA',         'None on record',      'ok'],
+                  ['Water / well', 'Room for a well',    'ok'],
                   ['Structures',  'None, vacant',        'ok'],
                 ].map(([label, val, status]) => (
                   <div key={label} className="bg-surface rounded p-2">
@@ -110,8 +110,8 @@ export default function HomePage() {
             },
             {
               q: '"Every lot I find has an HOA that bans tiny homes."',
-              a: 'CC&Rs that prohibit structures under a certain square footage are a silent deal-breaker.',
-              link: { href: '/search', label: 'No HOA is a first-class filter here' },
+              a: 'CC&Rs that prohibit structures under a certain square footage are a silent deal-breaker. County records don\'t show them, so we tell you to ask for the deed and any covenants on every lot.',
+              link: { href: '/search', label: 'See what we check on each lot' },
             },
             {
               q: '"I don\'t know what questions to even ask about a parcel."',
@@ -153,7 +153,6 @@ export default function HomePage() {
                 { label: 'Zoning (zone type)', pts: 30, pct: 60 },
                 { label: 'Water / well',        pts: 20, pct: 40 },
                 { label: 'Flood zone clear',    pts: 15, pct: 30 },
-                { label: 'No HOA / CC&Rs',      pts: 15, pct: 30 },
               ].map(c => (
                 <div key={c.label} className="flex items-center gap-3">
                   <span className="text-sm text-ink-2 w-36 flex-shrink-0">{c.label}</span>
@@ -181,11 +180,11 @@ export default function HomePage() {
           <div className="flex flex-col gap-3">
             {[
               { score: 91, label: 'Strong match', title: '14.7 acres, Shenandoah, VA',
-                desc: 'Vacant, Zone X flood, no HOA on record. Room for a well and septic. Strong match for off-grid homestead.' },
+                desc: 'Vacant, agricultural zoning, Zone X flood. Room for a well and septic. Strong match for off-grid homestead.' },
               { score: 63, label: 'Check details', title: '5.2 acres, Stanley, VA',
-                desc: 'Owned by an LLC, so CC&Rs are possible. Check before you buy. Tight for a well and septic.' },
+                desc: 'Residential zoning, so check the minimum home size. Tight for a well and septic.' },
               { score: 41, label: 'Ask hard questions', title: '2.8 acres, Luray, VA',
-                desc: 'Zone AE flood risk. CC&Rs present, likely prohibit structures under 700 sq ft.' },
+                desc: 'Zone AE flood risk and commercial zoning. Homes are unlikely to be allowed.' },
             ].map(ex => (
               <div key={ex.score}
                 className="bg-white border border-border rounded-lg p-4 flex items-start gap-4">

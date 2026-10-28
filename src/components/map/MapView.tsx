@@ -3,17 +3,22 @@
 /**
  * MapView — lots on a MapLibre map.
  *
- * - Basemap: OpenFreeMap (free, no key).
- * - Lot lines for the whole area: landrecords.us raster tiles through our proxy.
+ * - Basemap: OpenFreeMap (free, no key), or USGS satellite imagery (public
+ *   domain, no key) via the toggle. The lot detail map opens on satellite.
+ * - Lot lines for the whole area, through our tile proxy: landrecords.us
+ *   raster tiles out to zoom 15, then vector tiles, which stay sharp up close.
  * - Search results: drawn from our own results, colored by score.
  *   Dots when zoomed out, outlines when zoomed in.
  */
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import type { Parcel } from '@/types/parcel'
 import { SCORE_HEX, SCORE_THRESHOLDS } from '@/components/ui/ScorePill'
+import tailwindConfig from '../../../tailwind.config'
+
+const colors = tailwindConfig.theme?.extend?.colors as Record<string, string>
 
 interface MapViewProps {
   parcels: Parcel[]
@@ -24,7 +29,12 @@ interface MapViewProps {
 }
 
 const STYLE_URL = 'https://tiles.openfreemap.org/styles/liberty'
+// USDA NAIP aerial photos. Rural coverage stops at zoom 16; the map scales it up past that.
+const SATELLITE_TILES = 'https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/{z}/{y}/{x}'
+const SATELLITE_MAX_ZOOM = 16
 const LINES_MIN_ZOOM = 13   // lot lines are unreadable further out
+const VECTOR_ZOOM    = 15   // vector lot lines from here; tiles are too heavy further out (750 KB at 14)
+const VECTOR_MAX_ZOOM = 16  // deepest vector tiles we fetch; the map scales them up past this
 const OUTLINE_ZOOM   = 14   // switch result dots to outlines
 
 const scoreColor: maplibregl.ExpressionSpecification = [
@@ -77,6 +87,9 @@ export function MapView({ parcels, selectedLrid, onSelect, compact = false }: Ma
   const onSelectRef  = useRef(onSelect)
   parcelsRef.current  = parcels
   onSelectRef.current = onSelect
+  const [satellite, setSatellite] = useState(compact)
+  const satelliteRef = useRef(satellite)
+  satelliteRef.current = satellite
 
   // Create the map once
   useEffect(() => {
@@ -97,6 +110,19 @@ export function MapView({ parcels, selectedLrid, onSelect, compact = false }: Ma
     if (!compact) map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right')
 
     map.on('load', () => {
+      // Under the basemap's labels, so road and town names still show
+      map.addSource('satellite', {
+        type: 'raster',
+        tiles: [SATELLITE_TILES],
+        tileSize: 256,
+        maxzoom: SATELLITE_MAX_ZOOM,
+        attribution: 'Imagery <a href="https://www.usgs.gov/programs/national-geospatial-program/national-map" target="_blank">USGS</a>',
+      })
+      map.addLayer({
+        id: 'satellite', type: 'raster', source: 'satellite',
+        layout: { visibility: satelliteRef.current ? 'visible' : 'none' },
+      }, map.getStyle().layers.find(l => l.type === 'symbol')?.id)
+
       map.addSource('lot-lines', {
         type: 'raster',
         tiles: [`${window.location.origin}/api/tiles/raster/{z}/{x}/{y}.png`],
@@ -104,8 +130,25 @@ export function MapView({ parcels, selectedLrid, onSelect, compact = false }: Ma
         minzoom: LINES_MIN_ZOOM,
         attribution: 'Lot data <a href="https://landrecords.us" target="_blank">landrecords.us</a>',
       })
-      map.addLayer({ id: 'lot-lines', type: 'raster', source: 'lot-lines',
+      map.addLayer({ id: 'lot-lines', type: 'raster', source: 'lot-lines', maxzoom: VECTOR_ZOOM,
                      paint: { 'raster-opacity': 0.55 } })
+
+      map.addSource('lot-lines-vector', {
+        type: 'vector',
+        tiles: [`${window.location.origin}/api/tiles/{z}/{x}/{y}.pbf`],
+        minzoom: VECTOR_ZOOM,
+        maxzoom: VECTOR_MAX_ZOOM,
+        promoteId: 'lrid',
+      })
+      map.addLayer({
+        id: 'lot-lines-vector', type: 'line', source: 'lot-lines-vector',
+        'source-layer': 'parcels', minzoom: VECTOR_ZOOM,
+        paint: {
+          'line-color': colors.ink,
+          'line-opacity': 0.6,
+          'line-width': ['interpolate', ['linear'], ['zoom'], 15, 0.6, 18, 1.4],
+        },
+      })
 
       const { shapes, points } = toGeoJSON(parcelsRef.current)
       map.addSource('lots', { type: 'geojson', data: shapes, promoteId: 'lrid' })
@@ -122,7 +165,9 @@ export function MapView({ parcels, selectedLrid, onSelect, compact = false }: Ma
         id: 'lots-line', type: 'line', source: 'lots', minzoom: OUTLINE_ZOOM,
         paint: {
           'line-color': scoreColor,
-          'line-width': ['case', ['boolean', ['feature-state', 'selected'], false], 3.5, 1.5],
+          'line-width': ['interpolate', ['linear'], ['zoom'],
+            OUTLINE_ZOOM, ['case', ['boolean', ['feature-state', 'selected'], false], 3, 1.5],
+            18,           ['case', ['boolean', ['feature-state', 'selected'], false], 5, 3]],
         },
       })
       map.addLayer({
@@ -194,5 +239,20 @@ export function MapView({ parcels, selectedLrid, onSelect, compact = false }: Ma
     else map.once('lots-ready', apply)
   }, [selectedLrid])
 
-  return <div ref={containerRef} className="w-full h-full" />
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !loadedRef.current) return   // the load handler reads satelliteRef
+    map.setLayoutProperty('satellite', 'visibility', satellite ? 'visible' : 'none')
+  }, [satellite])
+
+  return (
+    <div className="relative w-full h-full">
+      <div ref={containerRef} className="w-full h-full" />
+      <button onClick={() => setSatellite(s => !s)}
+              className="absolute top-2 left-2 h-6 px-2 bg-white/90 border border-border rounded
+                         text-[10px] font-semibold text-ink-2 hover:text-accent transition-colors">
+        {satellite ? 'Map' : 'Satellite'}
+      </button>
+    </div>
+  )
 }

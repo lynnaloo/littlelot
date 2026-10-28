@@ -18,14 +18,49 @@ export type PublicAccess =
   | 'CLOSED'
   | 'UNKNOWN'
 
+// FEMA zone. X covers several risk levels, so read it with zonesubty:
+// minimal hazard, 0.2% annual chance (500-year), or reduced risk behind a levee.
 export type FloodZone =
-  | 'X'       // minimal risk
-  | 'AE'      // high risk, base flood elevation determined
-  | 'A'       // high risk, no base flood elevation
-  | 'AO'      // high risk, sheet flow
-  | 'VE'      // coastal high risk
-  | 'X500'    // moderate risk (0.2% annual chance)
+  | 'X'       // outside the 100-year floodplain, see zonesubty
+  | 'A'       // 100-year floodplain, no base flood elevation
+  | 'AE'      // 100-year floodplain, base flood elevation determined
+  | 'AH'      // 100-year floodplain, shallow ponding
+  | 'AO'      // 100-year floodplain, sheet flow
+  | 'V'       // coastal high hazard (waves)
+  | 'VE'      // coastal high hazard, base flood elevation determined
+  | 'D'       // not studied, risk undetermined
+
+// Forest Service Wildfire Hazard Potential (2023), the highest class on the lot.
+// Not from landrecords.us: looked up per search batch (see lib/wildfire.ts).
+export type WildfireHazard =
+  | 'very_low'
+  | 'low'
+  | 'moderate'
+  | 'high'
+  | 'very_high'
+  | 'non_burnable'   // farmland, town, bare ground, or water
   | 'unknown'
+
+// Slope across the lot from USGS elevation data (lib/terrain.ts). Loaded for
+// the open lot only, since each lookup takes several seconds.
+export interface BuildableGround {
+  flatAcres: number     // acres under a 15% grade
+  flatShare: number     // 0–1, share of the lot under a 15% grade
+  typicalGrade: number  // median slope, percent grade
+}
+
+// Straight-line distance to the nearest of each, or null when none is within
+// NEARBY_MAX_MILES (lib/nearby.ts). Loaded for the open lot only.
+export interface NearbyPlace {
+  name: string
+  miles: number
+}
+export interface Nearby {
+  town: NearbyPlace | null
+  school: NearbyPlace | null     // public elementary school
+  hospital: NearbyPlace | null
+}
+export const NEARBY_MAX_MILES = 45
 
 // Values as returned by the API (uppercase). null when the county doesn't report it.
 export type OwnerType =
@@ -81,7 +116,8 @@ export interface ParcelAttributes {
   saledate: string | null
   ownertype: OwnerType | null
   accesstype: PublicAccess | null
-  fldzone: FloodZone
+  fldzone: FloodZone | null
+  zonesubty: string | null  // FEMA subtype, e.g. 'AREA OF MINIMAL FLOOD HAZARD'
   elevmin: number | null    // metres
   elevavg: number | null    // metres
   elevmax: number | null    // metres
@@ -99,6 +135,7 @@ export interface Parcel extends ParcelAttributes {
   acreage: number           // parcelAcres(): calcarea in acres ?? taxacres ?? 0
   isVacant: boolean         // numbldgs === 0 || imprvalue === 0
   floodRisk: 'none' | 'moderate' | 'high'
+  floodLabel: string        // e.g. 'Zone X, 500-year floodplain'
   accessLabel: string       // human-readable road access
   distanceToTown: number | null   // miles, from Pelias geocoder
   nearestTown: string | null
@@ -107,6 +144,7 @@ export interface Parcel extends ParcelAttributes {
   zoningPlainText: string   // plain-English zoning summary
   zoneType: ZoneType
   hoaStatus: 'none' | 'present' | 'unknown'
+  wildfireHazard: WildfireHazard
   geometry: GeoJSON.Geometry | null   // lot outline, longitude/latitude
 }
 
@@ -115,6 +153,7 @@ export interface ScoreBreakdown {
   access: number    // 0–20
   water: number     // 0–20
   flood: number     // 0–15
+  fire: number      // 0–15
   hoa: number       // 0–15
   total: number     // 0–100
 }
@@ -154,12 +193,19 @@ export const ZONING_DETAILS_AVAILABLE = true
 // and the remaining dimensions are scaled up to 100, same as zoning above.
 export const ROAD_ACCESS_AVAILABLE = false
 
-// Score weights differ by tribe
+// No source tells us whether a lot is under an HOA or CC&Rs (they live in deed
+// records). While false, HOA is left out of the score and the filters, and the
+// lot details say "Unknown, ask for the deed".
+export const HOA_DATA_AVAILABLE = false
+
+// Score weights differ by tribe. Fire's points came out of access and HOA,
+// which are off for now, so the other factors keep their balance. Off-grid
+// gets the most: remote lots wait longest for a fire crew.
 export const TRIBE_SCORE_WEIGHTS: Record<BuildTribe, ScoreBreakdown> = {
-  thow:       { zoning: 30, access: 30, water: 10, flood: 15, hoa: 15, total: 0 },
-  foundation: { zoning: 35, access: 20, water: 20, flood: 15, hoa: 10, total: 0 },
-  offgrid:    { zoning: 25, access: 20, water: 25, flood: 15, hoa: 15, total: 0 },
-  community:  { zoning: 30, access: 25, water: 15, flood: 15, hoa: 15, total: 0 },
+  thow:       { zoning: 30, access: 25, water: 10, flood: 15, fire: 10, hoa: 10, total: 0 },
+  foundation: { zoning: 35, access: 15, water: 20, flood: 15, fire: 10, hoa: 5,  total: 0 },
+  offgrid:    { zoning: 25, access: 15, water: 25, flood: 15, fire: 15, hoa: 5,  total: 0 },
+  community:  { zoning: 30, access: 20, water: 15, flood: 15, fire: 10, hoa: 10, total: 0 },
 }
 
 // Starting minimum lot size by tribe. Under 0.1 ac is mostly slivers and

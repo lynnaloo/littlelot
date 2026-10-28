@@ -12,7 +12,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { fetchParcelBatch } from '@/lib/landrecords'
 import { enrichParcel } from '@/lib/scoring'
+import { wildfireHazards } from '@/lib/wildfire'
 import type { SearchFilters, SearchResult, BuildTribe, Parcel } from '@/types/parcel'
+import { HOA_DATA_AVAILABLE } from '@/types/parcel'
 
 // Lots per batch (10 API requests in parallel, about a second)
 const BATCH_SIZE = 100
@@ -59,8 +61,11 @@ export async function GET(req: NextRequest) {
       const batch = await fetchParcelBatch(filters, next, BATCH_SIZE)
       matched ??= batch.matched
       next      = batch.next
+      const wildfire = await wildfireHazards(
+        batch.features.map(f => ({ ...f.properties, geometry: f.geometry }))
+      )
       parcels.push(...applyChecks(
-        batch.features.map(f => enrichParcel(f.properties, tribe, f.geometry)),
+        batch.features.map((f, i) => enrichParcel(f.properties, tribe, f.geometry, wildfire[i])),
         filters
       ))
     }
@@ -100,7 +105,7 @@ function applyChecks(parcels: Parcel[], filters: SearchFilters): Parcel[] {
     (!filters.maxLandValue || (p.landvalue != null && p.landvalue <= filters.maxLandValue)) &&
     // We can't confirm "no HOA" for most lots, so drop only lots known to
     // have CC&Rs. Unknown lots stay and are labeled "verify".
-    (!filters.noHoa        || p.hoaStatus !== 'present') &&
+    (!HOA_DATA_AVAILABLE || !filters.noHoa || p.hoaStatus !== 'present') &&
     (!filters.minScore     || p.readinessScore >= filters.minScore)
   )
 }

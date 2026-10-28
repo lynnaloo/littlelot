@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { fetchParcelById } from '@/lib/landrecords'
 import { enrichParcel } from '@/lib/scoring'
+import { wildfireHazards } from '@/lib/wildfire'
 import type { BuildTribe } from '@/types/parcel'
 
 export async function GET(
@@ -15,7 +16,8 @@ export async function GET(
     if (!feature) {
       return NextResponse.json({ error: 'Lot not found' }, { status: 404 })
     }
-    const parcel = enrichParcel(feature.properties, tribe, feature.geometry)
+    const [wildfire] = await wildfireHazards([{ ...feature.properties, geometry: feature.geometry }])
+    const parcel = enrichParcel(feature.properties, tribe, feature.geometry, wildfire)
     return NextResponse.json(parcel)
   } catch (err) {
     console.error('[/api/parcel]', err)

@@ -122,7 +122,7 @@ const ATTRIBUTE_NAMES: (keyof ParcelAttributes)[] = [
   'usecode','usedesc','zoningcode','zoningdesc','zoningurl',
   'taxacres','calcarea','landvalue','imprvalue',
   'numbldgs','bldgsqft','yearbuilt','saleamt','saledate',
-  'ownertype','accesstype','fldzone',
+  'ownertype','accesstype','fldzone','zonesubty',
   'elevmin','elevavg','elevmax',
   'centroidx','centroidy','surfpointx','surfpointy',
   'placetype','placename',
