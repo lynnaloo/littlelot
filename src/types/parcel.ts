@@ -59,6 +59,7 @@ export interface Nearby {
   town: NearbyPlace | null
   school: NearbyPlace | null     // public elementary school
   hospital: NearbyPlace | null
+  recArea: NearbyPlace | null    // public land open to the public, to its nearest edge
 }
 export const NEARBY_MAX_MILES = 45
 

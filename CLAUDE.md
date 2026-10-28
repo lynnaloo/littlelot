@@ -155,8 +155,8 @@ These are the known gaps. Pick up any of these without asking:
    A Map/Satellite toggle uses USGS imagery (no key); the lot detail map
    opens on satellite. Card thumbnails are still SVG placeholders.
    Lot details also load buildable ground (`/api/slope`, USGS slope) and the
-   nearest town, elementary school and hospital (`/api/nearby`, Census, NCES,
-   FEMA). Both are free federal services, loaded only for the open lot.
+   nearest town, elementary school, hospital and recreation area
+   (`/api/nearby`: Census, NCES, FEMA, USGS PAD-US). Both are free federal services, loaded only for the open lot.
    The Zillow address link goes through `/api/zillow`, which adds the ZIP
    (Census ZIP code area); `placename` is a property name, not a town.
 

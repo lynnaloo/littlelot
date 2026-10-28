@@ -1,7 +1,7 @@
 /**
  * GET /api/nearby?lat=36.9&lng=-80.3
  *
- * Nearest town, elementary school and hospital for the open lot. A field is
+ * Nearest town, elementary school, hospital and recreation area for the open lot. A field is
  * missing when its lookup failed, and null when there's none within range.
  */
 

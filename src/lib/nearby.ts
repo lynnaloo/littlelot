@@ -1,11 +1,14 @@
 /**
- * nearby.ts — server-side nearest town, elementary school and hospital
+ * nearby.ts — server-side nearest town, elementary school, hospital and
+ * recreation area
  *
- * Three free federal map services, no keys:
+ * Four free federal map services, no keys:
  *   - Towns: Census TIGERweb incorporated places
  *   - Schools: NCES public elementary schools (2024–25), not fully virtual ones
  *   - Hospitals: FEMA's hospital list, open general and critical access
  *     hospitals (critical access hospitals must run a 24-hour ER)
+ *   - Recreation: USGS PAD-US, publicly owned land open to the public
+ *     (parks, forests, wildlife areas), measured to its nearest edge
  *
  * Distances are straight-line miles from the point inside the lot. Driving
  * distance will be longer. Call from API routes.
@@ -17,6 +20,13 @@ import { NEARBY_MAX_MILES } from '@/types/parcel'
 const TOWNS_URL     = 'https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/Places_CouSub_ConCity_SubMCD/MapServer/4/query'
 const SCHOOLS_URL   = 'https://nces.ed.gov/opengis/rest/services/K12_School_Locations/EDGE_ADMINDATA_PUBLICSCH_2425/MapServer/1/query'
 const HOSPITALS_URL = 'https://services.arcgis.com/XG15cJAlne2vxtgt/arcgis/rest/services/Hospitals_RAPT/FeatureServer/6/query'
+const PUBLIC_LAND_URL = 'https://services.arcgis.com/v01gqwM5QqNysAAi/arcgis/rest/services/PADUS_Public_Access/FeatureServer/0/query'
+
+// Owned outright (not easements) and open to the public, skipping slivers
+const REC_WHERE = "Pub_Access = 'OA' AND Category = 'Fee' AND GIS_Acres >= 5"
+// Search rings, in miles, then narrow down between the last empty and first hit
+const REC_RINGS = [1, 3, 10, 25, NEARBY_MAX_MILES]
+const REC_NARROWING_STEPS = 5   // about half a mile of precision at 25 miles
 
 interface Candidate { name: string; lat: number; lng: number }
 
@@ -32,13 +42,16 @@ function titleCase(s: string): string {
   return s !== s.toUpperCase() ? s : s.toLowerCase().replace(/\b\w/g, c => c.toUpperCase())
 }
 
+type Row = Record<string, string | number | null>
+
 async function queryNear(
   url: string,
   where: string,
   outFields: string,
   lat: number,
   lng: number,
-): Promise<Record<string, string | number | null>[]> {
+  miles = NEARBY_MAX_MILES,
+): Promise<Row[]> {
   const res = await fetch(url, {
     method:  'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -49,7 +62,7 @@ async function queryNear(
       geometryType:   'esriGeometryPoint',
       inSR:           '4326',
       spatialRel:     'esriSpatialRelIntersects',
-      distance:       String(NEARBY_MAX_MILES),
+      distance:       String(miles),
       units:          'esriSRUnit_StatuteMile',
       returnGeometry: 'false',
       f:              'json',
@@ -57,7 +70,7 @@ async function queryNear(
     signal:  AbortSignal.timeout(10_000),
   })
   if (!res.ok) throw new Error(`Nearby query error: ${res.status}`)
-  const json = await res.json() as { features?: { attributes: Record<string, string | number | null> }[]; error?: unknown }
+  const json = await res.json() as { features?: { attributes: Row }[]; error?: unknown }
   if (json.error || !json.features) throw new Error(`Nearby query error: ${JSON.stringify(json.error)}`)
   return json.features.map(f => f.attributes)
 }
@@ -103,6 +116,34 @@ async function nearestHospital(lat: number, lng: number): Promise<NearbyPlace | 
   })), lat, lng)
 }
 
+// Parks and forests are big shapes, so distance to the center would mislead.
+// Instead, widen the search ring until something touches it, then narrow in.
+// Ties go to the biggest area, which is likelier to have trails and facilities.
+async function nearestRecArea(lat: number, lng: number): Promise<NearbyPlace | null> {
+  const query = (miles: number) =>
+    queryNear(PUBLIC_LAND_URL, REC_WHERE, 'Unit_Nm,GIS_Acres', lat, lng, miles)
+
+  let lo = 0
+  let rows: Row[] = []
+  let ringHit: number | null = null
+  for (const ring of REC_RINGS) {
+    rows = await query(ring)
+    if (rows.length > 0) { ringHit = ring; break }
+    lo = ring
+  }
+  if (ringHit === null) return null
+
+  let hi = ringHit
+  for (let i = 0; i < REC_NARROWING_STEPS; i++) {
+    const mid = (lo + hi) / 2
+    const found = await query(mid)
+    if (found.length > 0) { hi = mid; rows = found } else lo = mid
+  }
+
+  const best = rows.reduce((a, b) => Number(b.GIS_Acres) > Number(a.GIS_Acres) ? b : a)
+  return { name: String(best.Unit_Nm), miles: hi }
+}
+
 // Each lookup fails on its own: a down service shows "Unknown" for that row
 // only. undefined means the lookup failed; null means none within range.
 export async function nearbyServices(lat: number, lng: number): Promise<{
@@ -112,10 +153,11 @@ export async function nearbyServices(lat: number, lng: number): Promise<{
     console.error('[nearby]', err)
     return undefined
   })
-  const [town, school, hospital] = await Promise.all([
+  const [town, school, hospital, recArea] = await Promise.all([
     settle(nearestTown(lat, lng)),
     settle(nearestSchool(lat, lng)),
     settle(nearestHospital(lat, lng)),
+    settle(nearestRecArea(lat, lng)),
   ])
-  return { town, school, hospital }
+  return { town, school, hospital, recArea }
 }
