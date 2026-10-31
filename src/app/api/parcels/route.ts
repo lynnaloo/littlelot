@@ -4,7 +4,7 @@
  * Query params mirror SearchFilters:
  *   tribe, geoid, bbox, minAcres, maxAcres, maxLandValue,
  *   noHoa, noFloodRisk, noStructures,
- *   minScore, sortBy, start
+ *   minScore, sortBy (score, acres_asc, acres_desc, value_asc, sold_desc), start
  *
  * Returns a SearchResult. Pass `next` back as `start` for more lots.
  */
@@ -70,11 +70,19 @@ export async function GET(req: NextRequest) {
       ))
     }
 
-    // Sort within what we fetched. Largest lot, and lowest value when the
-    // query has room for it, are already sorted by the API across the county.
+    // Sort within what we fetched. Lot size, and lowest value or latest sale
+    // when the query has room for them, are already sorted by the API across
+    // the county.
     switch (filters.sortBy) {
       case 'acres_desc':
         parcels.sort((a, b) => b.acreage - a.acreage)
+        break
+      case 'acres_asc':
+        parcels.sort((a, b) => a.acreage - b.acreage)
+        break
+      case 'sold_desc':
+        // ISO dates sort as text; lots with no sale on record go last
+        parcels.sort((a, b) => (b.saledate ?? '').localeCompare(a.saledate ?? ''))
         break
       case 'value_asc':
         // Lots with no value on record go last

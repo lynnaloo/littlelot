@@ -155,6 +155,7 @@ export interface ScoreBreakdown {
   water: number     // 0–20
   flood: number     // 0–15
   fire: number      // 0–15
+  land: number      // 0–15, lot size and steepness
   hoa: number       // 0–15
   total: number     // 0–100
 }
@@ -173,7 +174,7 @@ export interface SearchFilters {
   noStructures?: boolean
   minScore?: number
   maxElevation?: number
-  sortBy?: 'score' | 'acres_desc' | 'value_asc'
+  sortBy?: 'score' | 'acres_asc' | 'acres_desc' | 'value_asc' | 'sold_desc'
   start?: number          // where to resume in the API's results (SearchResult.next)
 }
 
@@ -201,12 +202,14 @@ export const HOA_DATA_AVAILABLE = false
 
 // Score weights differ by tribe. Fire's points came out of access and HOA,
 // which are off for now, so the other factors keep their balance. Off-grid
-// gets the most: remote lots wait longest for a fire crew.
+// gets the most: remote lots wait longest for a fire crew. Land (size and
+// steepness) came out of access, HOA and water, which is a flat guess for
+// every tribe but off-grid. Communities need the most room.
 export const TRIBE_SCORE_WEIGHTS: Record<BuildTribe, ScoreBreakdown> = {
-  thow:       { zoning: 30, access: 25, water: 10, flood: 15, fire: 10, hoa: 10, total: 0 },
-  foundation: { zoning: 35, access: 15, water: 20, flood: 15, fire: 10, hoa: 5,  total: 0 },
-  offgrid:    { zoning: 25, access: 15, water: 25, flood: 15, fire: 15, hoa: 5,  total: 0 },
-  community:  { zoning: 30, access: 20, water: 15, flood: 15, fire: 10, hoa: 10, total: 0 },
+  thow:       { zoning: 30, access: 20, water: 10, flood: 15, fire: 10, land: 10, hoa: 5, total: 0 },
+  foundation: { zoning: 35, access: 10, water: 15, flood: 15, fire: 10, land: 10, hoa: 5, total: 0 },
+  offgrid:    { zoning: 25, access: 10, water: 20, flood: 15, fire: 15, land: 10, hoa: 5, total: 0 },
+  community:  { zoning: 30, access: 15, water: 10, flood: 15, fire: 10, land: 15, hoa: 5, total: 0 },
 }
 
 // Starting minimum lot size by tribe. Under 0.1 ac is mostly slivers and

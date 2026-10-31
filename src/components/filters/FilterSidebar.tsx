@@ -67,6 +67,7 @@ export function FilterSidebar({ tribe, filters, onChange }: FilterSidebarProps) 
             ['Water / well',    weights.water],
             ['Flood zone',      weights.flood],
             ['Wildfire hazard', weights.fire],
+            ['Lot size and slope', weights.land],
             ...(HOA_DATA_AVAILABLE       ? [['No HOA',          weights.hoa]] : []),
           ].map(([label, pts]) => (
             <div key={label as string} className="mb-1.5">

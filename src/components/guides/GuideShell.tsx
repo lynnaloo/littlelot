@@ -1,6 +1,7 @@
 // Shared frame for the /guides pages: top bar, breadcrumb, and page width
 import Link from 'next/link'
 import { LogoMark } from '@/components/ui/LogoMark'
+import { SiteFooter } from '@/components/ui/SiteFooter'
 
 export interface Crumb {
   label: string
@@ -35,6 +36,7 @@ export function GuideShell({ crumbs, children }: { crumbs: Crumb[]; children: Re
         </nav>
         {children}
       </main>
+      <SiteFooter />
     </div>
   )
 }

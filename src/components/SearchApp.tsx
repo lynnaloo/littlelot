@@ -128,8 +128,10 @@ export function SearchApp({ initialPlace = null }: { initialPlace?: Place | null
               onChange={e => setFilters(f => ({ ...f, sortBy: e.target.value as SearchFilters['sortBy'] }))}
             >
               <option value="score">Best match first</option>
+              <option value="acres_asc">Smallest lot</option>
               <option value="acres_desc">Largest lot</option>
               <option value="value_asc">Lowest assessed value</option>
+              <option value="sold_desc">Recently sold</option>
             </select>
           </div>
 

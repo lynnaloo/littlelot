@@ -1,23 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { fetchParcelById } from '@/lib/landrecords'
-import { enrichParcel } from '@/lib/scoring'
-import { wildfireHazards } from '@/lib/wildfire'
-import type { BuildTribe } from '@/types/parcel'
+import { loadLot } from '@/lib/lot'
+import { parseTribe } from '@/lib/lotUrl'
 
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ lrid: string }> }
 ) {
-  const tribe = (req.nextUrl.searchParams.get('tribe') ?? 'offgrid') as BuildTribe
+  const tribe = parseTribe(req.nextUrl.searchParams.get('tribe'), 'offgrid')
 
   try {
     const { lrid } = await params
-    const feature = await fetchParcelById(lrid)
-    if (!feature) {
+    const parcel = await loadLot(lrid, tribe)
+    if (!parcel) {
       return NextResponse.json({ error: 'Lot not found' }, { status: 404 })
     }
-    const [wildfire] = await wildfireHazards([{ ...feature.properties, geometry: feature.geometry }])
-    const parcel = enrichParcel(feature.properties, tribe, feature.geometry, wildfire)
     return NextResponse.json(parcel)
   } catch (err) {
     console.error('[/api/parcel]', err)

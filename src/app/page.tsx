@@ -2,6 +2,7 @@
 import Link from 'next/link'
 import { LogoMark } from '@/components/ui/LogoMark'
 import { ScorePill } from '@/components/ui/ScorePill'
+import { SiteFooter } from '@/components/ui/SiteFooter'
 
 export default function HomePage() {
   return (
@@ -214,14 +215,7 @@ export default function HomePage() {
         </Link>
       </section>
 
-      <footer className="bg-white border-t border-border px-[5%] py-6 text-center text-xs text-ink-3">
-        Lot information powered by{' '}
-        <a href="https://landrecords.us" target="_blank" rel="noopener noreferrer"
-           className="text-accent font-medium hover:underline">
-          landrecords.us
-        </a>
-        , covering every county in the US.
-      </footer>
+      <SiteFooter />
     </main>
   )
 }

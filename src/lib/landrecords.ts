@@ -78,6 +78,13 @@ function buildCqlQuery(filters: SearchFilters): CqlQuery {
     extra.push(`fldzone='X'`)
   }
 
+  // A newest-first sort puts lots with no sale on record first, so leave
+  // them out. Ahead of acreage, which the API route re-checks if it's dropped.
+  const bySale = filters.sortBy === 'sold_desc'
+  if (bySale) {
+    extra.push(`saledate IS NOT NULL`)
+  }
+
   // calcarea is in square metres
   const minArea = filters.minAcres ? filters.minAcres * SQ_METRES_PER_ACRE : null
   const maxArea = filters.maxAcres ? filters.maxAcres * SQ_METRES_PER_ACRE : null
@@ -102,8 +109,11 @@ function buildCqlQuery(filters: SearchFilters): CqlQuery {
 
   const kept = extra.slice(0, 3)
   const valueKept = kept.some(c => c.startsWith('landvalue'))
+  const saleKept  = kept.some(c => c.startsWith('saledate'))
 
   const sortBy = filters.sortBy === 'acres_desc' ? 'calcarea DESC'
+               : filters.sortBy === 'acres_asc'  ? 'calcarea ASC'
+               : bySale && saleKept              ? 'saledate DESC'
                : byValue && valueKept            ? 'landvalue ASC'
                : undefined
 

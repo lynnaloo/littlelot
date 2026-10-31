@@ -9,11 +9,16 @@ import {
   NEARBY_MAX_MILES,
 } from '@/types/parcel'
 import { ScorePill } from '../ui/ScorePill'
-import { formatAcres, WILDFIRE_LABELS } from '@/lib/scoring'
+import { CONTACT_EMAIL } from '../ui/SiteFooter'
+import { formatAcres, streetAddress, WILDFIRE_LABELS } from '@/lib/scoring'
 import { planningSearchUrl, findCountyByGeoid, landForSaleUrl, zillowLandUrl } from '@/lib/counties'
 import { useBuildableGround, useNearby } from '@/lib/useLotSurroundings'
 import { ZONE_TYPE_LABELS, UNLIKELY_ZONE_TYPES } from '@/lib/zoning'
+import { lotPath } from '@/lib/lotUrl'
 import dynamic from 'next/dynamic'
+import Link from 'next/link'
+import { usePathname } from 'next/navigation'
+import { useState } from 'react'
 
 // MapLibre needs the browser
 const MapView = dynamic(() => import('../map/MapView').then(m => m.MapView), { ssr: false })
@@ -120,6 +125,49 @@ function zillowUrl(address: string, parcel: Parcel): string {
   return `/api/zillow?${params}`
 }
 
+// Link to the lot's own page, to send to a partner or post in a group
+function ShareBar({ parcel, tribe }: { parcel: Parcel; tribe: BuildTribe }) {
+  const [copied, setCopied] = useState(false)
+  const path = lotPath(parcel.lrid, tribe)
+  const onLotPage = usePathname()?.startsWith('/lot/')
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(new URL(path, window.location.origin).toString())
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      window.location.href = path   // no clipboard access: open the page instead
+    }
+  }
+
+  return (
+    <div className="flex items-center justify-end gap-3 px-3.5 py-1.5 bg-white border-b border-border
+                    text-[11px] flex-shrink-0">
+      {!onLotPage && <Link href={path} className="text-ink-2 hover:text-accent">Lot page</Link>}
+      <button onClick={copy} className="text-accent font-medium hover:underline">
+        {copied ? 'Link copied' : 'Copy link'}
+      </button>
+    </div>
+  )
+}
+
+// Opens an email with the lot's IDs filled in, so we can find it again
+function reportUrl(parcel: Parcel, location: string): string {
+  const body = [
+    'What looks wrong?',
+    '',
+    '',
+    '---',
+    `Lot: ${location}`,
+    `Parcel ID: ${parcel.parcelid ?? 'Not on record'}`,
+    `Lot ID: ${parcel.lrid}`,
+  ].join('\n')
+  const params = new URLSearchParams({ subject: `Problem with a lot: ${location}`, body })
+  // mailto wants %20, not +, for spaces
+  return `mailto:${CONTACT_EMAIL}?${params.toString().replace(/\+/g, '%20')}`
+}
+
 // accesstype is set mostly on public land, which is rarely for sale
 const PUBLIC_ACCESS_LABELS: Record<NonNullable<Parcel['accesstype']>, string> = {
   OPEN:       'Open to the public',
@@ -207,8 +255,7 @@ export function ParcelDetail({ parcel, tribe, onBack }: ParcelDetailProps) {
 
   const county  = findCountyByGeoid(parcel.geoid)
   const acreage = formatAcres(parcel.acreage)
-  // Vacant land often has a placeholder like "NO ADDRESSED STRUCTURES"; keep only street addresses
-  const address  = /^\d/.test(parcel.parceladdr ?? '') ? parcel.parceladdr : null
+  const address  = streetAddress(parcel)
   const location = [address, parcel.countyname, parcel.parcelstate]
     .filter(Boolean).join(', ')
 
@@ -223,13 +270,17 @@ export function ParcelDetail({ parcel, tribe, onBack }: ParcelDetailProps) {
         </button>
       )}
 
+      {/* scrollable content. The map scrolls away, so a phone has room to
+          read, but the score stays pinned at the top. */}
+      <div className="flex-1 overflow-y-auto bg-surface">
+
       {/* map of this lot */}
-      <div className="h-36 flex-shrink-0 relative overflow-hidden bg-tan-lt">
+      <div className="h-36 relative overflow-hidden bg-tan-lt">
         <MapView parcels={[parcel]} selectedLrid={parcel.lrid} compact />
       </div>
 
       {/* score strip */}
-      <div className="flex items-center justify-between px-3.5 py-2.5 bg-white border-b border-border flex-shrink-0">
+      <div className="sticky top-0 z-10 flex items-center justify-between px-3.5 py-2.5 bg-white border-b border-border">
         <div>
           <div className="text-[10px] text-ink-3">Readiness score</div>
           <div className="text-[10px] text-ink-3">for your build type</div>
@@ -250,8 +301,7 @@ export function ParcelDetail({ parcel, tribe, onBack }: ParcelDetailProps) {
         </div>
       </div>
 
-      {/* scrollable content */}
-      <div className="flex-1 overflow-y-auto bg-surface">
+      <ShareBar parcel={parcel} tribe={tribe} />
 
         {/* at a glance */}
         <div className="grid grid-cols-2 gap-2 p-3">
@@ -410,6 +460,7 @@ export function ParcelDetail({ parcel, tribe, onBack }: ParcelDetailProps) {
             ['Water',       parcel.scoreBreakdown.water,   TRIBE_SCORE_WEIGHTS[tribe].water],
             ['Flood zone',  parcel.scoreBreakdown.flood,   TRIBE_SCORE_WEIGHTS[tribe].flood],
             ['Wildfire',    parcel.scoreBreakdown.fire,    TRIBE_SCORE_WEIGHTS[tribe].fire],
+            ['Lot size and slope', parcel.scoreBreakdown.land, TRIBE_SCORE_WEIGHTS[tribe].land],
             ...(HOA_DATA_AVAILABLE
               ? [['HOA', parcel.scoreBreakdown.hoa, TRIBE_SCORE_WEIGHTS[tribe].hoa]]
               : []),
@@ -443,6 +494,13 @@ export function ParcelDetail({ parcel, tribe, onBack }: ParcelDetailProps) {
             ))}
           </div>
         </Section>
+
+        <p className="mx-3 mb-4 text-center text-[11px] text-ink-3">
+          Something look wrong with this lot?{' '}
+          <a href={reportUrl(parcel, location)} className="text-accent font-medium hover:underline">
+            Report a problem
+          </a>
+        </p>
 
       </div>
 

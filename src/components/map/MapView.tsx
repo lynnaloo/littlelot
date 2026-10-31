@@ -85,8 +85,13 @@ export function MapView({ parcels, selectedLrid, onSelect, compact = false }: Ma
   // Latest props for map event handlers, which are bound once
   const parcelsRef   = useRef(parcels)
   const onSelectRef  = useRef(onSelect)
+  const selectedRef  = useRef(selectedLrid)
   parcelsRef.current  = parcels
   onSelectRef.current = onSelect
+  selectedRef.current = selectedLrid
+  // The first fit after the map opens goes to the selected lot, if any, so a
+  // lot picked in the list is in view when the buyer switches to the map
+  const firstFitRef  = useRef(true)
   const [satellite, setSatellite] = useState(compact)
   const satelliteRef = useRef(satellite)
   satelliteRef.current = satellite
@@ -212,11 +217,15 @@ export function MapView({ parcels, selectedLrid, onSelect, compact = false }: Ma
       const { shapes, points } = toGeoJSON(parcels)
       ;(map.getSource('lots') as maplibregl.GeoJSONSource | undefined)?.setData(shapes)
       ;(map.getSource('lot-points') as maplibregl.GeoJSONSource | undefined)?.setData(points)
-      const bounds = boundsOf(parcels)
+      const selected = firstFitRef.current && !compact
+        ? parcels.find(p => p.lrid === selectedRef.current)
+        : undefined
+      firstFitRef.current = false
+      const bounds = boundsOf(selected ? [selected] : parcels)
       if (bounds) {
         map.fitBounds(bounds, {
-          padding: compact ? 20 : 40,
-          maxZoom: compact ? 17 : 15,
+          padding: compact ? 20 : selected ? 80 : 40,
+          maxZoom: compact || selected ? 17 : 15,
           duration: 0,
         })
       }

@@ -101,7 +101,7 @@ Indexed fields: `geoid`, `lrid`, `ownername`, `accesstype`, `ownertype`, `placet
 
 ## Scoring system
 
-The Readiness Score is computed in `src/lib/scoring.ts`. It has six dimensions:
+The Readiness Score is computed in `src/lib/scoring.ts`. It has seven dimensions:
 
 | Dimension | Function | Notes |
 |---|---|---|
@@ -110,6 +110,7 @@ The Readiness Score is computed in `src/lib/scoring.ts`. It has six dimensions:
 | Water | `waterScore()` | Proxied from acreage. No direct well data. |
 | Flood | `floodScore()` | From `fldzone` field — reliable. |
 | Fire | `fireScore()` | Forest Service 2023 Wildfire Hazard Potential, highest class sampled on the lot (`src/lib/wildfire.ts`). Looked up once per search batch. |
+| Land | `landScore()` | Lot size (bands by tribe) plus a rough steepness from `elevmin`/`elevmax` over the lot's width. Coarse bands: it runs high on small flat lots and low on big rugged ones. |
 | HOA | `hoaScore()` | Off (`HOA_DATA_AVAILABLE`): no source for HOA or CC&R data. Details say "Unknown, ask for the deed". |
 
 When iterating on scoring weights, edit `TRIBE_SCORE_WEIGHTS` in `src/types/parcel.ts`.
@@ -153,7 +154,11 @@ These are the known gaps. Pick up any of these without asking:
    colored by score. The vector tile proxy at `/api/tiles/{z}/{x}/{y}.pbf`
    works but the map doesn't use it yet.
    A Map/Satellite toggle uses USGS imagery (no key); the lot detail map
-   opens on satellite. Card thumbnails are still SVG placeholders.
+   opens on satellite. Card thumbnails are a USGS aerial photo (map export,
+   lazy-loaded) with the lot outline drawn over it (`LotShape`).
+   Each lot has its own page at `/lot/{lrid}?tribe=...` (`src/lib/lot.ts`
+   loads it; `src/lib/lotUrl.ts` builds links and is safe for client code).
+   Lot cards show the street address and county, never `placename`.
    Lot details also load buildable ground (`/api/slope`, USGS slope) and the
    nearest town, elementary school, hospital and recreation area
    (`/api/nearby`: Census, NCES, FEMA, USGS PAD-US). Both are free federal services, loaded only for the open lot.
@@ -193,6 +198,8 @@ These are the known gaps. Pick up any of these without asking:
 npm install
 cp .env.local.sample .env.local   # add LANDRECORDS_API_KEY and GOOGLE_MAPS_API_KEY
 npm run dev                        # http://localhost:3000
+# A second dev server in the same checkout needs its own build folder:
+# NEXT_DIST_DIR=node_modules/.cache/next-alt npx next dev -p 3100
 npm run type-check                 # verify types before committing
 npm run build                      # full build check
 ```

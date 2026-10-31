@@ -2,7 +2,7 @@
  * scoring.ts — Tiny Home Readiness Score
  *
  * Computes a 0–100 score for each parcel, weighted by build tribe.
- * The score is a composite of six dimensions:
+ * The score is a composite of seven dimensions:
  *   - Zoning legality  (25–35 pts), from the zone type only, never full points
  *   - Road access      (15–25 pts depending on tribe)
  * Road access is left out until the data exists (see the flags in
@@ -10,6 +10,7 @@
  *   - Water/well potential (10–25 pts)
  *   - Flood zone clear (15 pts all tribes)
  *   - Wildfire hazard  (10–15 pts), Forest Service map via lib/wildfire.ts
+ *   - Land             (10–15 pts), lot size and a rough steepness
  *   - No HOA/CC&Rs     (5–10 pts), left out until the data exists
  */
 
@@ -44,6 +45,11 @@ export function parcelAcres(attrs: Pick<ParcelAttributes, 'calcarea' | 'taxacres
 // Small lots matter to tiny home buyers, so show 0.25 rather than rounding to 0.3
 export function formatAcres(acres: number): string {
   return acres < 1 ? acres.toFixed(2) : acres.toFixed(1)
+}
+
+// Vacant land often has a placeholder like "NO ADDRESSED STRUCTURES"; keep only street addresses
+export function streetAddress(attrs: Pick<ParcelAttributes, 'parceladdr'>): string | null {
+  return /^\d/.test(attrs.parceladdr ?? '') ? attrs.parceladdr : null
 }
 
 // ── Zoning score ─────────────────────────────────────────────────────────────
@@ -176,6 +182,43 @@ export const WILDFIRE_LABELS: Record<WildfireHazard, { label: string; status: 'o
   unknown:      { label: 'Unknown, verify', status: 'warn' },
 }
 
+// ── Land score ────────────────────────────────────────────────────────────────
+// Room to build (lot size) and how steep the lot is, half each. Size bands
+// differ by tribe: a THOW needs a pad and parking, a foundation home usually
+// needs room for a septic field, a homestead or community needs acres.
+
+// Upper acreage bounds for 20%, 50% and 80% of the size half; at or over the
+// last bound gets it all
+const SIZE_BANDS: Record<BuildTribe, [number, number, number]> = {
+  thow:       [0.1,  0.25, 1],
+  foundation: [0.25, 0.5,  1],
+  offgrid:    [1,    2,    5],
+  community:  [2,    5,    10],
+}
+
+function sizeShare(acres: number, tribe: BuildTribe): number {
+  const [a, b, c] = SIZE_BANDS[tribe]
+  return acres < a ? 0.2 : acres < b ? 0.5 : acres < c ? 0.8 : 1
+}
+
+// Rough grade from the lot's elevation range over its width. Close to the
+// USGS slope on most lots, but high on small flat ones and low on big rugged
+// ones, so only coarse bands. The lot details show the measured slope.
+export function roughGrade(attrs: Pick<ParcelAttributes, 'elevmin' | 'elevmax' | 'calcarea'>): number | null {
+  if (attrs.elevmin == null || attrs.elevmax == null || !attrs.calcarea) return null
+  return (attrs.elevmax - attrs.elevmin) / Math.sqrt(attrs.calcarea) * 100
+}
+
+function steepShare(grade: number | null): number {
+  if (grade == null) return 0.5   // unknown, same as flood and fire
+  return grade < 10 ? 1 : grade < 18 ? 0.7 : grade < 30 ? 0.4 : 0.1
+}
+
+function landScore(attrs: ParcelAttributes, tribe: BuildTribe): number {
+  const share = (sizeShare(parcelAcres(attrs), tribe) + steepShare(roughGrade(attrs))) / 2
+  return Math.round(TRIBE_SCORE_WEIGHTS[tribe].land * share)
+}
+
 // ── HOA score ─────────────────────────────────────────────────────────────────
 // The parcel schema doesn't include CC&R data directly.
 // We infer from owner type and parcel context.
@@ -211,15 +254,16 @@ export function computeScore(
   const water  = waterScore(attrs, tribe)
   const flood  = floodScore(attrs, tribe)
   const fire   = fireScore(wildfire, tribe)
+  const land   = landScore(attrs, tribe)
   const hoa    = HOA_DATA_AVAILABLE       ? hoaScore(attrs, tribe) : 0
 
   const max = 100
     - (ZONING_DETAILS_AVAILABLE ? 0 : weights.zoning)
     - (ROAD_ACCESS_AVAILABLE    ? 0 : weights.access)
     - (HOA_DATA_AVAILABLE       ? 0 : weights.hoa)
-  const total = Math.round(((zoning + access + water + flood + fire + hoa) / max) * 100)
+  const total = Math.round(((zoning + access + water + flood + fire + land + hoa) / max) * 100)
 
-  return { zoning, access, water, flood, fire, hoa, total }
+  return { zoning, access, water, flood, fire, land, hoa, total }
 }
 
 // ── Plain-text zoning summary ─────────────────────────────────────────────────

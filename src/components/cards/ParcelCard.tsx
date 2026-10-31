@@ -4,7 +4,8 @@ import type { Parcel } from '@/types/parcel'
 import { ROAD_ACCESS_AVAILABLE, HOA_DATA_AVAILABLE } from '@/types/parcel'
 import { ScorePill } from '../ui/ScorePill'
 import { LotShape } from './LotShape'
-import { formatAcres, WILDFIRE_LABELS } from '@/lib/scoring'
+import { formatAcres, streetAddress, WILDFIRE_LABELS } from '@/lib/scoring'
+import { findCountyByGeoid } from '@/lib/counties'
 import { ZONE_TYPE_LABELS, UNLIKELY_ZONE_TYPES } from '@/lib/zoning'
 
 interface ParcelCardProps {
@@ -37,7 +38,13 @@ function AttrRow({
 
 export function ParcelCard({ parcel, isSelected, onSelect }: ParcelCardProps) {
   const acreage   = formatAcres(parcel.acreage)
-  const location  = [parcel.placename, parcel.countyname, parcel.parcelstate].filter(Boolean).join(', ')
+  // Not placename: it holds property names ("Smith Farm"), not towns
+  const county    = findCountyByGeoid(parcel.geoid)
+  const location  = [
+    streetAddress(parcel),
+    county ? `${county.name}, ${county.state}`
+           : [parcel.countyname, parcel.parcelstate].filter(Boolean).join(', '),
+  ].filter(Boolean).join(', ')
 
   const floodStatus = parcel.floodRisk === 'none' ? 'ok'
                     : parcel.floodRisk === 'moderate' ? 'warn'
